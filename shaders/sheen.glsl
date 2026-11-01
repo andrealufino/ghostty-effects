@@ -25,6 +25,13 @@ vec3 screenBlend(vec3 base, vec3 light) {
     return 1.0 - (1.0 - base) * (1.0 - light);
 }
 
+// Adds `tint` at strength `a` in a way that shows on any theme: as light on a
+// dark background, as a tint (multiply) on a light one, where light would vanish.
+vec3 glowBlend(vec3 base, vec3 tint, float a) {
+    bool lightTheme = dot(iBackgroundColor, vec3(0.2126, 0.7152, 0.0722)) > 0.5;
+    return lightTheme ? base * (1.0 - a * (1.0 - tint)) : screenBlend(base, tint * a);
+}
+
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec4 base = texture(iChannel0, fragCoord / iResolution.xy);
     vec4 c = iCurrentCursor;
@@ -37,7 +44,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // halo, outside the cursor only, and only while focused
     if (iFocus != 0) {
         float outside = smoothstep(0.0, 1.0, sdf);
-        col = screenBlend(col, tint * HALO * exp(-max(sdf, 0.0) / (HALO_SIZE * unit)) * outside);
+        col = glowBlend(col, tint, HALO * exp(-max(sdf, 0.0) / (HALO_SIZE * unit)) * outside);
     }
 
     // reflection, inside the cursor only

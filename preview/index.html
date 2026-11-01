@@ -137,6 +137,10 @@ pre.code .k { color: var(--accent); }
           <button type="button" id="cs-2" data-s="2" aria-pressed="false">waiting</button>
           <button type="button" id="cs-3" data-s="3" aria-pressed="false">done</button>
         </span>
+        <span class="seg" role="group" aria-label="Terminal theme" id="themes">
+          <button type="button" id="th-dark" data-theme="dark" aria-pressed="true">dark</button>
+          <button type="button" id="th-light" data-theme="light" aria-pressed="false">light</button>
+        </span>
         <span class="seg" role="group" aria-label="Cursor style">
           <button type="button" id="styleBar" data-style="bar" aria-pressed="true">bar</button>
           <button type="button" id="styleBlock" data-style="block" aria-pressed="false">block</button>
@@ -183,23 +187,29 @@ const ACTIVE = window.GHOSTTY_EFFECTS_ACTIVE || [];
 const BY_ID = Object.fromEntries(EFFECTS.map(e => [e.id, e]));
 const CURSOR_COLORS = [
   { name: "Ice", hex: "#9ccfd8" },
+  { name: "Cerulean", hex: "#008ec4" },
   { name: "Ivory", hex: "#e9e4d8" },
   { name: "Amber", hex: "#e5b770" },
   { name: "Lavender", hex: "#b7a9f2" },
 ];
-const TERM = { bg: "#15171b", fg: "#d7dae0", dim: "#8a909a", blue: "#82aaff", green: "#9ece6a", red: "#f7768e", violet: "#bb9af7" };
+const THEMES = {
+  dark:  { bg: "#15171b", fg: "#d7dae0", dim: "#8a909a", blue: "#82aaff", green: "#9ece6a", red: "#f7768e", violet: "#bb9af7" },
+  light: { bg: "#f1f1f1", fg: "#424242", dim: "#7d7d7d", blue: "#2a64b0", green: "#3f7d20", red: "#c4314b", violet: "#7a45c0" },
+};
+let TERM = THEMES.dark;
 const $ = id => document.getElementById(id);
 
 const state = {
   enabled: new Set((ACTIVE.length ? ACTIVE : ["glide"]).filter(id => BY_ID[id])),
-  tab: null, speed: 1, cursorHex: CURSOR_COLORS[0].hex, style: "bar",
+  tab: null, speed: 1, cursorHex: CURSOR_COLORS[0].hex, style: "bar", theme: "dark",
 };
 try {
   const saved = JSON.parse(localStorage.getItem("ghostty-effects-preview") || "null");
-  if (saved) { state.cursorHex = saved.cursorHex || state.cursorHex; state.style = saved.style || state.style; }
+  if (saved) { state.cursorHex = saved.cursorHex || state.cursorHex; state.style = saved.style || state.style; state.theme = THEMES[saved.theme] ? saved.theme : state.theme; }
 } catch (e) {}
 state.tab = [...state.enabled][0] || (EFFECTS[0] && EFFECTS[0].id);
-function persist() { try { localStorage.setItem("ghostty-effects-preview", JSON.stringify({ cursorHex: state.cursorHex, style: state.style })); } catch (e) {} }
+function persist() { try { localStorage.setItem("ghostty-effects-preview", JSON.stringify({ cursorHex: state.cursorHex, style: state.style, theme: state.theme })); } catch (e) {} }
+TERM = THEMES[state.theme];
 
 /* ---------- UI ---------- */
 function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
@@ -240,7 +250,12 @@ $("speeds").addEventListener("click", ev => {
 [$("styleBar"), $("styleBlock")].forEach(b => b.addEventListener("click", () => {
   state.style = b.dataset.style; persist(); syncStyle(); term.dirty = true;
 }));
-function syncStyle() { $("styleBar").setAttribute("aria-pressed", String(state.style === "bar")); $("styleBlock").setAttribute("aria-pressed", String(state.style === "block")); }
+$("themes").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  state.theme = b.dataset.theme; TERM = THEMES[state.theme]; persist(); syncStyle(); term.dirty = true;
+});
+function syncStyle() {
+  $("themes").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.theme === state.theme))); $("styleBar").setAttribute("aria-pressed", String(state.style === "bar")); $("styleBlock").setAttribute("aria-pressed", String(state.style === "block")); }
 $("swatches").innerHTML = CURSOR_COLORS.map((c, i) => `<button type="button" class="swatch" id="sw${i}" data-hex="${c.hex}" title="${c.name}" aria-label="${c.name} cursor" aria-pressed="${c.hex === state.cursorHex}" style="background:${c.hex}"></button>`).join("");
 $("swatches").addEventListener("click", ev => {
   const b = ev.target.closest(".swatch"); if (!b) return;

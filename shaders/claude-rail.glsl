@@ -34,6 +34,13 @@ vec3 screenBlend(vec3 base, vec3 light) {
     return 1.0 - (1.0 - base) * (1.0 - light);
 }
 
+// Adds `tint` at strength `a` in a way that shows on any theme: as light on a
+// dark background, as a tint (multiply) on a light one, where light would vanish.
+vec3 glowBlend(vec3 base, vec3 tint, float a) {
+    bool lightTheme = dot(iBackgroundColor, vec3(0.2126, 0.7152, 0.0722)) > 0.5;
+    return lightTheme ? base * (1.0 - a * (1.0 - tint)) : screenBlend(base, tint * a);
+}
+
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec4 base = texture(iChannel0, fragCoord / iResolution.xy);
     fragColor = base;
@@ -71,5 +78,5 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         a = DONE_OPACITY * max(exp(-q * q), lit * 0.45) * (1.0 - smoothstep(0.55, 1.0, t));
     }
 
-    fragColor = vec4(screenBlend(base.rgb, color * a * shape), base.a);
+    fragColor = vec4(glowBlend(base.rgb, color, a * shape), base.a);
 }
