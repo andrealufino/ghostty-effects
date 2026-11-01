@@ -35,6 +35,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5;
@@ -105,6 +106,7 @@ pre.code .k { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .fx, .toggle, .toggle::after { transition: none; } }
 </style>
 <script src="shaders.js"></script>
+<script src="state.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -115,8 +117,8 @@ pre.code .k { color: var(--accent); }
   </header>
 
   <div class="missing" id="missing" hidden>
-    <strong>The preview has no shaders loaded.</strong>
-    <p style="margin:6px 0 0;color:var(--muted)">Open it with <code>gfx preview</code>: that writes <code>preview/shaders.js</code> from the current <code>shaders/</code> folder and opens this page.</p>
+    <strong>No shaders found next to this page.</strong>
+    <p style="margin:6px 0 0;color:var(--muted)"><code>preview/shaders.js</code> is missing. Run <code>gfx preview</code> to rebuild it from <code>shaders/</code> and open this page.</p>
   </div>
 
   <section class="bench" id="bench">
@@ -144,7 +146,7 @@ pre.code .k { color: var(--accent); }
 
     <div class="panel">
       <h2>Effects</h2>
-      <p class="hint">Switch on one or more. Opened with <code>gfx preview</code>, this starts from what is active in Ghostty.</p>
+      <p class="hint">Switch on one or more. The page starts from what is active in Ghostty.</p>
       <div class="fxlist" id="fxList"></div>
     </div>
   </section>
@@ -170,8 +172,8 @@ pre.code .k { color: var(--accent); }
 </div>
 
 <script>
-const DATA = window.GHOSTTY_EFFECTS || { effects: [], active: [] };
-const EFFECTS = DATA.effects;
+const EFFECTS = window.GHOSTTY_EFFECTS || [];
+const ACTIVE = window.GHOSTTY_EFFECTS_ACTIVE || [];
 const BY_ID = Object.fromEntries(EFFECTS.map(e => [e.id, e]));
 const CURSOR_COLORS = [
   { name: "Ice", hex: "#9ccfd8" },
@@ -183,7 +185,7 @@ const TERM = { bg: "#15171b", fg: "#d7dae0", dim: "#8a909a", blue: "#82aaff", gr
 const $ = id => document.getElementById(id);
 
 const state = {
-  enabled: new Set((DATA.active.length ? DATA.active : ["glide"]).filter(id => BY_ID[id])),
+  enabled: new Set((ACTIVE.length ? ACTIVE : ["glide"]).filter(id => BY_ID[id])),
   tab: null, speed: 1, cursorHex: CURSOR_COLORS[0].hex, style: "bar",
 };
 try {

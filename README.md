@@ -59,7 +59,12 @@ Every change rewrites the include and reloads Ghostty with `SIGUSR2`, the same a
 
 ## Preview
 
-`gfx preview` writes `preview/shaders.js` from the current `shaders/` folder and opens `preview/index.html`. The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms, starting from the effects active in Ghostty. It has a bar/block cursor switch, slow motion, cursor colours, and a terminal you can type in.
+Open `preview/index.html`, or run `gfx preview`. The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms. It has a bar/block cursor switch, slow motion, cursor colours, and a terminal you can type in.
+
+The page reads two generated files next to it:
+
+- `preview/shaders.js`, the shaders bundled for the browser. It is tracked, so the page works straight from a clone. `gfx preview`, `gfx check`, `set`, `add` and `rm` rebuild it; after editing a shader, run one of them (or `gfx preview`) so the page shows the edit.
+- `preview/state.js`, the selection active in Ghostty, so the page starts from it. Untracked.
 
 ## Tune
 
