@@ -59,6 +59,9 @@ gfx color #9ccfd8         # effect colour for both themes
 gfx color #9ccfd8 #008ec4 # one for dark themes, one for light themes
 gfx color default         # follow the cursor colour again
 gfx color                 # show the current colour
+gfx cursor #ff9e64        # cursor colour, for both themes
+gfx cursor #ff9e64 #c2410c # one for the dark theme, one for the light theme
+gfx cursor default        # back to the theme's cursor colour
 gfx auto on               # pause effects on battery, resume on power
 gfx preview               # open the interactive preview
 gfx check                 # compile every shader with Ghostty's prefix
@@ -67,6 +70,8 @@ gfx check                 # compile every shader with Ghostty's prefix
 Every change rewrites the include and reloads Ghostty with `SIGUSR2`, the same as Cmd+Shift+,.
 
 By default the effects take the cursor colour of the active theme. `gfx color` overrides it without touching the repo: gfx writes copies of the active shaders to `~/.local/state/ghostty-effects/shaders/` with `GFX_TINT_DARK` and `GFX_TINT_LIGHT` defined at the top, and Ghostty loads those. Each shader picks one of the two from the terminal background, so the colour follows light and dark mode. The Claude effects keep amber for waiting and green for done; the colour applies to their working state. After editing a shader while a colour is set, run `gfx on` to refresh the copies.
+
+`gfx cursor` sets the cursor colour through the same include, and it stays in place when the effects are off. With one colour it is a plain `cursor-color` line. With two, it needs a detour: `cursor-color` has no light/dark form, so gfx reads the `theme = light:…,dark:…` pair from the main Ghostty config, writes copies of those two themes to `~/.local/state/ghostty-effects/themes/` with the cursor colour added, and points `theme` at the copies. The copies are rebuilt on every gfx command, so after changing the theme in the main config, run `gfx on`. While no effect colour is set, the effects follow the cursor colour too.
 
 `gfx auto on` installs a LaunchAgent (`com.andrealufino.ghostty-effects.power`) that checks the power source once a minute. `gfx off` always wins: the agent never turns on effects you switched off.
 
