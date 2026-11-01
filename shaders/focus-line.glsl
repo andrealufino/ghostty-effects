@@ -1,13 +1,13 @@
-// Focus line — a barely-there band on the current line, with a thin marker
-// at the window edge. Slides smoothly when the cursor changes line.
+// Focus line — a barely-there highlight on the current line, held to its own
+// row, fading out a little past the cursor. Slides when the cursor changes line.
 //
 // Ghostty custom shader (Ghostty 1.4+). Enable with: gfx add focus-line
 
 // --- settings
-const float DURATION = 0.24;  // seconds for the band to slide to a new line
-const float OPACITY  = 0.055; // band strength (0-1); keep it low
-const float PADDING  = 0.10;  // extra band height above and below the line, in cursor heights
-const float SOFTNESS = 0.45;  // edge feather, in cursor heights
+const float DURATION = 0.24;  // seconds for the highlight to slide to a new line
+const float OPACITY  = 0.07;  // highlight strength (0-1); keep it low
+const float EDGE     = 1.0;   // top and bottom edge softness, in pixels (keeps it to one row)
+const float TRAIL    = 14.0;  // how far it runs past the cursor before it has faded out, in cursor heights
 const float MARKER   = 0.55;  // opacity of the marker at the left edge (0 hides it)
 const float MARKER_W = 0.07;  // marker width, in cursor heights
 const vec3  TINT     = vec3(-1.0); // vec3(-1.0) uses the cursor colour
@@ -16,8 +16,8 @@ float easeInOutCubic(float x) {
     return x < 0.5 ? 4.0 * x * x * x : 1.0 - pow(-2.0 * x + 2.0, 3.0) * 0.5;
 }
 
-float cursorCenterY(vec4 c) {
-    return c.y - c.w * 0.5;
+vec2 cursorCenter(vec4 c) {
+    return vec2(c.x + c.z * 0.5, c.y - c.w * 0.5);
 }
 
 vec3 screenBlend(vec3 base, vec3 light) {
@@ -47,18 +47,21 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float unit = max(iCurrentCursor.w, 1.0);
     float t = clamp((iTime - iTimeCursorChange) / DURATION, 0.0, 1.0);
     if (iFocus == 0) t = 1.0; // settle at once when unfocused, no frozen half-slide
-    float y = mix(cursorCenterY(iPreviousCursor), cursorCenterY(iCurrentCursor), easeInOutCubic(t));
+    vec2 at = mix(cursorCenter(iPreviousCursor), cursorCenter(iCurrentCursor), easeInOutCubic(t));
 
-    float halfH = unit * (0.5 + PADDING);
-    float soft = SOFTNESS * unit;
-    float dy = abs(fragCoord.y - y);
-    float band = 1.0 - smoothstep(halfH - soft * 0.5, halfH + soft * 0.5, dy);
+    // vertically: exactly the cursor's row, with a hairline-soft edge
+    float dy = abs(fragCoord.y - at.y);
+    float row = 1.0 - smoothstep(unit * 0.5 - EDGE, unit * 0.5 + EDGE, dy);
 
-    float marker = (1.0 - smoothstep(MARKER_W * unit - 0.5, MARKER_W * unit + 0.5, fragCoord.x))
-                 * (1.0 - smoothstep(unit * 0.5 - 0.5, unit * 0.5 + 0.5, dy));
+    // horizontally: full up to the cursor, then a long, gentle fade
+    float run = (fragCoord.x - at.x) / (TRAIL * unit);
+    float fade = 1.0 - smoothstep(0.0, 1.0, run);
+    fade *= fade;
+
+    float marker = (1.0 - smoothstep(MARKER_W * unit - 0.5, MARKER_W * unit + 0.5, fragCoord.x)) * row;
 
     vec3 tint = effectTint(TINT);
-    vec3 col = glowBlend(base.rgb, tint, OPACITY * band);
+    vec3 col = glowBlend(base.rgb, tint, OPACITY * row * fade);
     col = mix(col, tint, MARKER * marker);
     fragColor = vec4(col, base.a);
 }

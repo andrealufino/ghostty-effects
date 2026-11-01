@@ -4,7 +4,7 @@ Quiet cursor shaders for [Ghostty](https://ghostty.org), and `gfx`, a small comm
 
 | Effect       | What it does |
 |--------------|--------------|
-| `focus-line` | A barely-there band on the current line, with a thin marker at the window edge. Slides when the cursor changes line. |
+| `focus-line` | A barely-there highlight on the current line, held to its own row and fading out a little past the cursor, with a thin marker at the window edge. Slides when the cursor changes line. |
 | `spotlight`  | The window dims gently away from the cursor; the light drifts after it. |
 | `glide`      | A short, tapered trail behind the cursor. Thin behind a bar cursor, wider behind a block. |
 | `ripple`     | A single hairline ring when the cursor lands somewhere new. Silent while typing. |
