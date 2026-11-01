@@ -16,10 +16,17 @@ INCLUDE=$STATE/ghostty.conf
 AGENT_LABEL=com.andrealufino.ghostty-effects.power
 AGENT_PLIST=$HOME/Library/LaunchAgents/$AGENT_LABEL.plist
 MARK="# --- Cursor effects (managed by gfx, see $ROOT) ---"
+CLAUDE_SETTINGS=${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
 
 # Application order: ambient effects first, cursor effects last.
 # Shaders not listed here are applied after these, alphabetically.
-ORDER=(focus-line spotlight glide ripple sheen)
+ORDER=(focus-line spotlight claude-frame claude-rail glide ripple sheen)
+
+# Claude Code status signal. The hooks write the state into palette slot 255
+# as rgb(238, 237, 236 + state); the claude-* shaders decode it. Idle resets
+# the slot to the theme's own colour.
+CLAUDE_DONE_CURSOR="#9ece6a"   # brief cursor tint that timestamps the done flash
+CLAUDE_DONE_HOLD=1.6           # seconds before done falls back to idle
 
 # ---------- helpers
 
@@ -131,6 +138,7 @@ cmd_status() {
     else print -- "  ○ ${(r:12:)n} $(describe $n)"; fi
   done
   print -- "Battery saver: $(agent_loaded && print on || print off)"
+  [[ -f $CLAUDE_SETTINGS ]] && cmd_claude status 2>/dev/null
   grep -qF -- "$INCLUDE" "$(ghostty_config 2>/dev/null)" 2>/dev/null \
     || print -- "Not installed in Ghostty yet: run 'gfx install'."
 }
@@ -274,6 +282,7 @@ cmd_install() {
 cmd_uninstall() {
   local cfg tmp
   cmd_auto off >/dev/null
+  [[ -f $CLAUDE_SETTINGS ]] && cmd_claude off >/dev/null
   if cfg=$(ghostty_config); then
     tmp=$(mktemp)
     grep -vF -e "$MARK" -e "config-file = ?$INCLUDE" $cfg > $tmp
@@ -284,6 +293,121 @@ cmd_uninstall() {
   rm -rf $STATE
   pkill -USR2 -x ghostty 2>/dev/null
   print -- "Removed gfx from Ghostty. The repo itself is untouched."
+}
+
+# ---------- Claude Code status
+
+# The terminal of the Claude Code session that ran this hook. Hooks have no
+# controlling terminal of their own, so walk up the process tree to the first
+# ancestor attached to one.
+claude_tty() {
+  local p=$PPID t i
+  for i in {1..10}; do
+    t=${$(ps -o tty= -p $p 2>/dev/null)// /}
+    if [[ -n $t && $t != '??' && -w /dev/$t ]]; then print -- /dev/$t; return 0; fi
+    p=${$(ps -o ppid= -p $p 2>/dev/null)// /}
+    [[ -n $p && $p != 0 && $p != 1 ]] || break
+  done
+  return 1
+}
+
+# Run by the Claude Code hooks: writes the state for the claude-* shaders
+# straight to the session's terminal. (Claude Code's own `terminalSequence`
+# field only passes title sequences and ignores async hooks.)
+cmd_hook() {
+  local event=${1:-} input sid sfile tty
+  input=$(cat 2>/dev/null)
+  sid=$(print -r -- "$input" | jq -r '.session_id // empty' 2>/dev/null)
+  sid=${${sid:-default}//[^A-Za-z0-9_-]/}
+  mkdir -p $STATE/claude
+  sfile=$STATE/claude/$sid
+  tty=$(claude_tty) || return 0
+  emit() { print -rn -- "$1" > $tty 2>/dev/null }
+  slot() { printf '\e]4;255;rgb:ee/ed/%02x\a' $(( 236 + $1 )) }
+  case $event in
+    idle)
+      rm -f $sfile; emit $'\e]104;255\a\e]112\a' ;;
+    working)
+      print working > $sfile; emit "$(slot 1)" ;;
+    waiting)
+      print waiting > $sfile; emit "$(slot 2)" ;;
+    done)
+      # a brief cursor tint timestamps the flash (iTimeCursorChange)
+      print done > $sfile
+      emit "$(slot 3)"$'\e]12;'"$CLAUDE_DONE_CURSOR"$'\a'
+      sleep 0.12
+      emit $'\e]112\a'
+      sleep $CLAUDE_DONE_HOLD
+      if [[ -f $sfile && $(<$sfile) == done ]]; then rm -f $sfile; emit $'\e]104;255\a'; fi ;;
+    *) die "usage: gfx hook idle|working|waiting|done" ;;
+  esac
+  # forget sessions that ended without a SessionEnd
+  local -a stale=($STATE/claude/*(N.mh+24))
+  (( ${#stale} )) && rm -f $stale
+  return 0
+}
+
+# Add or remove the gfx hooks in Claude Code's settings. Every gfx entry runs
+# `gfx hook`, so removal finds exactly those and leaves everything else alone.
+cmd_claude() {
+  local action=${1:-status}
+  case $action in
+    on|off|status) ;;
+    *) die "usage: gfx claude [on|off]" ;;
+  esac
+  [[ -f $CLAUDE_SETTINGS ]] || die "Claude Code settings not found at $CLAUDE_SETTINGS."
+  (( $+commands[jq] )) || die "jq is needed for the Claude Code hooks (brew install jq)."
+  python3 - $CLAUDE_SETTINGS $action <<'PY' || die "could not update $CLAUDE_SETTINGS."
+import json, sys
+path, action = sys.argv[1], sys.argv[2]
+CMD = "~/.local/bin/gfx hook "
+WANTED = [  # (event, matcher, state)
+    ("SessionStart", "", "idle"),
+    ("UserPromptSubmit", "", "working"),
+    ("PreToolUse", "", "working"),
+    ("PostToolUse", "", "working"),
+    ("Notification", "permission_prompt", "waiting"),
+    ("Stop", "", "done"),
+    ("SessionEnd", "", "idle"),
+]
+with open(path, encoding="utf-8") as f:
+    settings = json.load(f)
+hooks = settings.setdefault("hooks", {})
+
+def ours(h):
+    return h.get("type") == "command" and h.get("command", "").startswith(CMD)
+
+installed = sum(1 for groups in hooks.values() for g in groups for h in g.get("hooks", []) if ours(h))
+if action == "status":
+    print("Claude Code hooks: " + ("on" if installed else "off"))
+    sys.exit(0)
+
+# drop existing gfx entries, and any group they leave empty
+for event in list(hooks):
+    groups = []
+    for g in hooks[event]:
+        g["hooks"] = [h for h in g.get("hooks", []) if not ours(h)]
+        if g["hooks"]:
+            groups.append(g)
+    if groups:
+        hooks[event] = groups
+    else:
+        del hooks[event]
+
+if action == "on":
+    for event, matcher, state in WANTED:
+        hooks.setdefault(event, []).append({
+            "matcher": matcher,
+            "hooks": [{"type": "command", "command": CMD + state, "async": True, "timeout": 5}],
+        })
+if not hooks:
+    del settings["hooks"]
+
+text = json.dumps(settings, indent=2, ensure_ascii=False) + "\n"
+with open(path, "w", encoding="utf-8") as f:   # in place: keeps links and ownership
+    f.write(text)
+print("Claude Code hooks: " + action + ("" if action == "off" else ". Takes effect in new Claude Code sessions."))
+PY
 }
 
 cmd_help() {
@@ -297,6 +421,7 @@ gfx — Ghostty cursor effects
   gfx rm <fx...>         remove effects
   gfx on | off | toggle  switch all effects, keeping the selection
   gfx auto [on|off]      pause effects on battery, resume on power
+  gfx claude [on|off]    Claude Code hooks for the claude-* effects
   gfx preview            open the interactive preview
   gfx check [fx...]      compile shaders with Ghostty's prefix (needs glslang)
   gfx install            hook gfx into the Ghostty config (once)
@@ -311,7 +436,7 @@ EOF
 cmd=${1:-status}
 (( $# )) && shift
 case $cmd in
-  status|list|set|add|rm|on|off|toggle|auto|check|preview|install|uninstall|help|_power) cmd_$cmd "$@" ;;
+  status|list|set|add|rm|on|off|toggle|auto|claude|hook|check|preview|install|uninstall|help|_power) cmd_$cmd "$@" ;;
   remove) cmd_rm "$@" ;;
   -h|--help) cmd_help ;;
   *) die "unknown command '$cmd'. Run 'gfx help'." ;;

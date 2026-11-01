@@ -131,6 +131,12 @@ pre.code .k { color: var(--accent); }
       <div class="status">
         <span class="pill live" id="mode">demo</span>
         <span class="grow" id="modeHint">Click the terminal and type to try it yourself.</span>
+        <span class="seg" role="group" aria-label="Claude Code state" id="claudeStates" title="State sent by the Claude Code hooks (claude-* effects)">
+          <button type="button" id="cs-0" data-s="0" aria-pressed="true">idle</button>
+          <button type="button" id="cs-1" data-s="1" aria-pressed="false">working</button>
+          <button type="button" id="cs-2" data-s="2" aria-pressed="false">waiting</button>
+          <button type="button" id="cs-3" data-s="3" aria-pressed="false">done</button>
+        </span>
         <span class="seg" role="group" aria-label="Cursor style">
           <button type="button" id="styleBar" data-style="bar" aria-pressed="true">bar</button>
           <button type="button" id="styleBlock" data-style="block" aria-pressed="false">block</button>
@@ -379,6 +385,7 @@ uniform vec4 iCurrentCursorColor; uniform vec4 iPreviousCursorColor;
 uniform int iCurrentCursorStyle; uniform int iPreviousCursorStyle; uniform int iCursorVisible;
 uniform float iTimeCursorChange; uniform float iTimeFocus; uniform int iFocus;
 uniform vec3 iBackgroundColor; uniform vec3 iForegroundColor; uniform vec3 iCursorColor;
+uniform vec3 iPalette[256];
 uniform sampler2D iChannel0;
 #define CURSORSTYLE_BLOCK 0
 #define CURSORSTYLE_BLOCK_HOLLOW 1
@@ -412,6 +419,7 @@ function program(id, body) {
   gl.bindAttribLocation(p, 0, "a"); gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
   const u = {}; UNIFORMS.forEach(n => u[n] = gl.getUniformLocation(p, n));
+  u.slot = gl.getUniformLocation(p, "iPalette[255]");
   return programs[id] = { p, u };
 }
 function makeTex() {
@@ -441,13 +449,21 @@ function rebuildChain() {
 function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
 
 const clock = { sim: 0, last: performance.now(), frame: 0 };
+const claude = { state: 0, settleAt: 0 };
+function setClaude(s) {
+  claude.state = s;
+  if (s === 3) { cursor.changed = clock.sim; claude.settleAt = clock.sim + 1.6; } // the done hook tints the cursor: a fresh timestamp
+  $("claudeStates").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(+x.dataset.s === s)));
+}
+$("claudeStates").addEventListener("click", ev => { const b = ev.target.closest("button"); if (b) setClaude(+b.dataset.s); });
 const cursor = { cur: [0, 0, 0, 0], prev: [0, 0, 0, 0], changed: 0, key: "" };
-window.__harness = { state, term, cursor, clock, demo, metrics, rebuildChain };
+window.__harness = { state, term, cursor, clock, demo, metrics, rebuildChain, claude: () => claude, setClaude: s => setClaude(s) };
 
 function frame(nowMs) {
   const dt = Math.min(0.1, (nowMs - clock.last) / 1000) * state.speed;
   clock.last = nowMs; clock.sim += dt; clock.frame++;
   demoStep(clock.sim);
+  if (claude.state === 3 && clock.sim >= claude.settleAt) setClaude(0);
   if (term.dirty) {
     const { x, yTop, width } = drawText();
     const rect = [x, metrics.h - yTop, width, metrics.lh];
@@ -474,6 +490,9 @@ function frame(nowMs) {
     gl.uniform4f(u.iCurrentCursorColor, color[0], color[1], color[2], 1); gl.uniform4f(u.iPreviousCursorColor, color[0], color[1], color[2], 1);
     gl.uniform1i(u.iCurrentCursorStyle, styleId); gl.uniform1i(u.iPreviousCursorStyle, styleId); gl.uniform1i(u.iCursorVisible, 1);
     gl.uniform1f(u.iTimeCursorChange, cursor.changed); gl.uniform1f(u.iTimeFocus, -10); gl.uniform1i(u.iFocus, 1);
+    // palette slot 255, as the Claude Code hooks write it
+    const slot = claude.state === 0 ? [238, 238, 238] : [238, 237, 236 + claude.state];
+    gl.uniform3f(u.slot, slot[0] / 255, slot[1] / 255, slot[2] / 255);
     gl.uniform3fv(u.iBackgroundColor, hexToRgb(TERM.bg)); gl.uniform3fv(u.iForegroundColor, hexToRgb(TERM.fg)); gl.uniform3fv(u.iCursorColor, color);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, input); gl.uniform1i(u.iChannel0, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

@@ -10,7 +10,14 @@ Quiet cursor shaders for [Ghostty](https://ghostty.org), and `gfx`, a small comm
 | `ripple`     | A single hairline ring when the cursor lands somewhere new. Silent while typing. |
 | `sheen`      | A reflection crosses the cursor on every move, with a faint halo. Richest on a block cursor. |
 
-Effects stack. Ghostty runs them in sequence, in the order above (ambient first, cursor last), whatever order you type them in.
+Two more show what Claude Code is doing, driven by its hooks (see [Claude Code status](#claude-code-status)):
+
+| Effect         | What it does |
+|----------------|--------------|
+| `claude-frame` | A quiet frame around the window: breathes while Claude works, amber while it waits for a permission, one green flash when the answer is ready. |
+| `claude-rail`  | The same states on a single hairline along the top edge, with a light travelling along it while Claude works. |
+
+Effects stack. Ghostty runs them in sequence, in a fixed order (ambient first, cursor last), whatever order you type them in.
 
 ## Requirements
 
@@ -56,6 +63,26 @@ gfx check                 # compile every shader with Ghostty's prefix
 Every change rewrites the include and reloads Ghostty with `SIGUSR2`, the same as Cmd+Shift+,.
 
 `gfx auto on` installs a LaunchAgent (`com.andrealufino.ghostty-effects.power`) that checks the power source once a minute. `gfx off` always wins: the agent never turns on effects you switched off.
+
+## Claude Code status
+
+```sh
+gfx claude on           # add the hooks to ~/.claude/settings.json
+gfx add claude-frame    # or claude-rail
+```
+
+The hooks run `gfx hook <state>` asynchronously, so they never slow Claude down. A hook has no terminal of its own, so `gfx hook` walks up the process tree to the Claude Code session's terminal and writes the signal there: every tab carries its own state. (Claude Code's `terminalSequence` hook field would be tidier, but it only passes title sequences and ignores async hooks; tested with Claude Code 2.1.314.)
+
+| Hook | State | Signal |
+|------|-------|--------|
+| `SessionStart`, `SessionEnd` | idle | resets palette slot 255 and the cursor colour |
+| `UserPromptSubmit`, `PreToolUse`, `PostToolUse` | working | slot 255 = `rgb(238, 237, 237)` |
+| `Notification` (`permission_prompt`) | waiting | slot 255 = `rgb(238, 237, 238)` |
+| `Stop` | done | slot 255 = `rgb(238, 237, 239)`, cursor tinted for 0.12 s, idle again after 1.6 s unless a new prompt came in |
+
+Palette slot 255 is normally `#eeeeee`; the state moves it by one step, which nothing on screen shows. The shaders decode it from `iPalette[255]`. A shader cannot remember when something happened, so the done hook briefly tints the cursor: Ghostty stamps `iTimeCursorChange`, and the flash runs from that moment.
+
+The hooks sit beside any others in the settings file. `gfx claude off` removes exactly the entries that run `gfx hook`. Limits: after an approved permission the state stays amber until the tool finishes (`PostToolUse` is the first event after approval), and interrupting Claude with Esc fires no `Stop`, so the state stays on working until the next prompt.
 
 ## Preview
 
