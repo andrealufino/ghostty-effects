@@ -42,6 +42,15 @@ vec3 effectTint(vec3 configured) {
 #endif
 }
 
+// Breaks up 8-bit banding in soft gradients with a fixed, triangular noise of
+// about one colour step: invisible on its own, it hides the rings a smooth
+// falloff otherwise shows on a flat background.
+vec3 dither(vec2 p) {
+    float a = fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+    float b = fract(52.9829189 * fract(dot(p.yx + 31.0, vec2(0.06711056, 0.00583715))));
+    return vec3((a + b - 1.0) / 255.0);
+}
+
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec4 base = texture(iChannel0, fragCoord / iResolution.xy);
     vec4 c = iCurrentCursor;
@@ -54,7 +63,9 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // halo, outside the cursor only, and only while focused
     if (iFocus != 0) {
         float outside = smoothstep(0.0, 1.0, sdf);
-        col = glowBlend(col, tint, HALO * exp(-max(sdf, 0.0) / (HALO_SIZE * unit)) * outside);
+        float halo = HALO * exp(-max(sdf, 0.0) / (HALO_SIZE * unit)) * outside;
+        col = glowBlend(col, tint, halo);
+        if (halo > 0.001) col += dither(fragCoord);
     }
 
     // reflection, inside the cursor only
