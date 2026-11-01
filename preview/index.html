@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghostty Effects</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a working bench. Terminal as the instrument, effects as switches beside it, source and usage below. */
+:root {
+  --bg: #eceef1;
+  --surface: #f9fafb;
+  --ink: #15181d;
+  --muted: #5b6270;
+  --line: #d5d9e0;
+  --accent: #2f6f7b;
+  --accent-soft: rgba(47, 111, 123, 0.10);
+  --code-bg: #f2f4f6;
+  --comment: #7c8492;
+  --font-ui: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --term-bg: #15171b;
+  --term-chrome: #1d2025;
+  --term-edge: #2a2e35;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1013; --surface: #15181c; --ink: #e5e7eb; --muted: #8b929e; --line: #262a31;
+    --accent: #8ec5cf; --accent-soft: rgba(142, 197, 207, 0.12); --code-bg: #111317; --comment: #6d7480;
+    --term-edge: #2f343c;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5;
+  padding: 28px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px));
+}
+code { font-family: var(--font-mono); font-size: 0.9em; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 6px; }
+h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+.lede { color: var(--muted); margin: 0; max-width: 64ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.missing { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 16px 18px; }
+
+.bench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+@media (max-width: 860px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+
+.window { border-radius: 11px; overflow: hidden; background: var(--term-bg); border: 1px solid var(--term-edge); box-shadow: 0 18px 40px -22px rgba(0,0,0,0.55); min-width: 0; }
+.chrome { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; background: var(--term-chrome); border-bottom: 1px solid #0c0d10; color: #8b919b; font-family: var(--font-mono); font-size: 12px; }
+.dots { display: flex; gap: 7px; }
+.dots i { width: 11px; height: 11px; border-radius: 50%; background: #3a3e45; display: block; }
+.chrome .title { flex: 1; text-align: center; margin-right: 52px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.screen { position: relative; outline: none; cursor: text; }
+.screen:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+#gl { display: block; width: 100%; }
+.err { position: absolute; inset: 8px; margin: 0; padding: 10px; background: rgba(120,20,20,0.92); color: #fff; font: 12px/1.4 var(--font-mono); white-space: pre-wrap; overflow: auto; border-radius: 6px; }
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px; background: var(--term-chrome); border-top: 1px solid #0c0d10; color: #8b919b; font-size: 12.5px; }
+.status .grow { flex: 1; min-width: 160px; }
+.pill { font-family: var(--font-mono); font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid #3a3f47; color: #b9bfc8; white-space: nowrap; }
+.pill.live { border-color: #55747a; color: #a9d6de; }
+.seg { display: inline-flex; border: 1px solid #3a3f47; border-radius: 7px; overflow: hidden; }
+.seg button { font: 500 11.5px var(--font-mono); color: #9ba1aa; background: transparent; border: 0; padding: 4px 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: #2c3138; color: #e6e9ee; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.swatches { display: inline-flex; gap: 6px; align-items: center; }
+.swatch { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.18); cursor: pointer; padding: 0; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #15171b, 0 0 0 3.5px #c9ced6; }
+
+.panel { display: grid; gap: 10px; min-width: 0; }
+.panel h2 { font-size: 13px; font-weight: 600; margin: 0; }
+.panel .hint { font-size: 13px; color: var(--muted); margin: 0; }
+.fxlist { display: grid; gap: 8px; }
+.fx { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; text-align: left; width: 100%; padding: 12px 14px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; transition: border-color .15s, background .15s; }
+.fx:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.fx[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.fx .name { font-weight: 600; font-size: 15px; }
+.fx .file { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.fx .desc { grid-column: 1 / -1; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.toggle { width: 30px; height: 18px; border-radius: 999px; background: var(--line); position: relative; align-self: center; transition: background .15s; }
+.toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+.fx[aria-pressed="true"] .toggle { background: var(--accent); }
+.fx[aria-pressed="true"] .toggle::after { transform: translateX(12px); }
+
+.lower { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .lower { grid-template-columns: minmax(0, 1fr); } }
+.card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; overflow: hidden; }
+.cardhead { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--line); min-width: 0; }
+.cardhead h3 { margin: 0; font-size: 13px; font-weight: 600; flex: 1; }
+.tabs { display: flex; gap: 2px; flex: 1; overflow-x: auto; min-width: 0; }
+.tab { font: 500 12px var(--font-mono); padding: 5px 9px; border-radius: 6px; border: 0; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.tab[aria-selected="true"] { background: var(--code-bg); color: var(--ink); }
+.copy { font: 500 12px var(--font-ui); padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; }
+pre.code { margin: 0; padding: 14px 16px; background: var(--code-bg); font: 12.5px/1.6 var(--font-mono); color: var(--ink); overflow: auto; max-height: 460px; tab-size: 4; }
+pre.code .c { color: var(--comment); }
+pre.code .k { color: var(--accent); }
+.notes { padding: 14px 16px; display: grid; gap: 10px; font-size: 13.5px; color: var(--muted); }
+.notes p { margin: 0; }
+.notes code { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .fx, .toggle, .toggle::after { transition: none; } }
+</style>
+<script src="shaders.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">custom-shader · Ghostty 1.4+</span>
+    <h1>Ghostty Effects</h1>
+    <p class="lede">Quiet cursor shaders for Ghostty. This preview runs the very files in <code>shaders/</code> with the same cursor uniforms Ghostty provides. Effects stack: Ghostty runs them in sequence, in the order listed.</p>
+  </header>
+
+  <div class="missing" id="missing" hidden>
+    <strong>The preview has no shaders loaded.</strong>
+    <p style="margin:6px 0 0;color:var(--muted)">Open it with <code>gfx preview</code>: that writes <code>preview/shaders.js</code> from the current <code>shaders/</code> folder and opens this page.</p>
+  </div>
+
+  <section class="bench" id="bench">
+    <div class="window">
+      <div class="chrome"><div class="dots"><i></i><i></i><i></i></div><div class="title">zsh — ~/developer/atelier</div></div>
+      <div class="screen" id="screen" tabindex="0" aria-label="Test terminal: click and type to try the effects">
+        <canvas id="gl"></canvas>
+        <pre class="err" id="err" hidden></pre>
+      </div>
+      <div class="status">
+        <span class="pill live" id="mode">demo</span>
+        <span class="grow" id="modeHint">Click the terminal and type to try it yourself.</span>
+        <span class="seg" role="group" aria-label="Cursor style">
+          <button type="button" id="styleBar" data-style="bar" aria-pressed="true">bar</button>
+          <button type="button" id="styleBlock" data-style="block" aria-pressed="false">block</button>
+        </span>
+        <span class="seg" role="group" aria-label="Speed" id="speeds">
+          <button type="button" id="sp1" data-speed="1" aria-pressed="true">1×</button>
+          <button type="button" id="sp2" data-speed="0.5" aria-pressed="false">½×</button>
+          <button type="button" id="sp4" data-speed="0.25" aria-pressed="false">¼×</button>
+        </span>
+        <span class="swatches" role="group" aria-label="Cursor colour" id="swatches"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Effects</h2>
+      <p class="hint">Switch on one or more. Opened with <code>gfx preview</code>, this starts from what is active in Ghostty.</p>
+      <div class="fxlist" id="fxList"></div>
+    </div>
+  </section>
+
+  <section class="lower" id="lower">
+    <div class="card">
+      <div class="cardhead">
+        <div class="tabs" role="tablist" id="tabs" aria-label="Sources"></div>
+        <button type="button" class="copy" id="copySrc">Copy</button>
+      </div>
+      <pre class="code" id="src"></pre>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h3>Use it</h3><button type="button" class="copy" id="copyCfg">Copy</button></div>
+      <pre class="code" id="cfg"></pre>
+      <div class="notes">
+        <p><code>gfx off</code> and <code>gfx on</code> switch everything while keeping the selection; <code>gfx auto on</code> pauses the effects on battery.</p>
+        <p>Settings are the constants at the top of each shader. Edit, then run <code>gfx on</code> to reload Ghostty.</p>
+        <p>While an animated shader is active, Ghostty redraws the focused window continuously. That is the only real cost.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const DATA = window.GHOSTTY_EFFECTS || { effects: [], active: [] };
+const EFFECTS = DATA.effects;
+const BY_ID = Object.fromEntries(EFFECTS.map(e => [e.id, e]));
+const CURSOR_COLORS = [
+  { name: "Ice", hex: "#9ccfd8" },
+  { name: "Ivory", hex: "#e9e4d8" },
+  { name: "Amber", hex: "#e5b770" },
+  { name: "Lavender", hex: "#b7a9f2" },
+];
+const TERM = { bg: "#15171b", fg: "#d7dae0", dim: "#8a909a", blue: "#82aaff", green: "#9ece6a", red: "#f7768e", violet: "#bb9af7" };
+const $ = id => document.getElementById(id);
+
+const state = {
+  enabled: new Set((DATA.active.length ? DATA.active : ["glide"]).filter(id => BY_ID[id])),
+  tab: null, speed: 1, cursorHex: CURSOR_COLORS[0].hex, style: "bar",
+};
+try {
+  const saved = JSON.parse(localStorage.getItem("ghostty-effects-preview") || "null");
+  if (saved) { state.cursorHex = saved.cursorHex || state.cursorHex; state.style = saved.style || state.style; }
+} catch (e) {}
+state.tab = [...state.enabled][0] || (EFFECTS[0] && EFFECTS[0].id);
+function persist() { try { localStorage.setItem("ghostty-effects-preview", JSON.stringify({ cursorHex: state.cursorHex, style: state.style })); } catch (e) {} }
+
+/* ---------- UI ---------- */
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function highlight(src, marker = "//") {
+  return src.split("\n").map(line => {
+    const i = line.indexOf(marker);
+    let code = i >= 0 ? line.slice(0, i) : line, cmt = i >= 0 ? line.slice(i) : "";
+    code = esc(code).replace(/\b(const|float|int|bool|vec2|vec3|vec4|void|return|if|out|in)\b/g, '<span class="k">$1</span>');
+    return code + (cmt ? '<span class="c">' + esc(cmt) + "</span>" : "");
+  }).join("\n");
+}
+function render() {
+  $("fxList").innerHTML = EFFECTS.map(e => `<button type="button" class="fx" id="fx-${e.id}" data-id="${e.id}" aria-pressed="${state.enabled.has(e.id)}"><span class="name">${esc(e.name)}</span><span class="toggle" aria-hidden="true"></span><span class="file">shaders/${esc(e.file)}</span><span class="desc">${esc(e.desc)}</span></button>`).join("");
+  $("tabs").innerHTML = EFFECTS.map(e => `<button type="button" role="tab" class="tab" id="tab-${e.id}" data-id="${e.id}" aria-selected="${state.tab === e.id}">${esc(e.id)}</button>`).join("");
+  $("src").innerHTML = state.tab ? highlight(BY_ID[state.tab].src) : "";
+  const chosen = EFFECTS.filter(e => state.enabled.has(e.id)).map(e => e.id);
+  $("cfg").innerHTML = highlight(chosen.length ? "# use exactly this selection\ngfx set " + chosen.join(" ") : "# no effect selected\ngfx off", "#");
+}
+$("fxList").addEventListener("click", ev => {
+  const b = ev.target.closest(".fx"); if (!b) return;
+  const id = b.dataset.id;
+  state.enabled.has(id) ? state.enabled.delete(id) : state.enabled.add(id);
+  state.tab = id; render(); rebuildChain();
+});
+$("tabs").addEventListener("click", ev => { const b = ev.target.closest(".tab"); if (!b) return; state.tab = b.dataset.id; render(); });
+function copyFrom(btn, text) {
+  const done = ok => { btn.textContent = ok ? "Copied" : "Selected"; setTimeout(() => btn.textContent = "Copy", 1400); };
+  const select = () => { const pre = btn.closest(".card").querySelector("pre"); const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+  try { navigator.clipboard.writeText(text).then(() => done(true), () => { select(); done(false); }); } catch (e) { select(); done(false); }
+}
+$("copySrc").addEventListener("click", e => copyFrom(e.currentTarget, BY_ID[state.tab].src));
+$("copyCfg").addEventListener("click", e => copyFrom(e.currentTarget, $("cfg").textContent.split("\n").filter(l => !l.startsWith("#")).join("\n")));
+$("speeds").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  state.speed = parseFloat(b.dataset.speed);
+  $("speeds").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+});
+[$("styleBar"), $("styleBlock")].forEach(b => b.addEventListener("click", () => {
+  state.style = b.dataset.style; persist(); syncStyle(); term.dirty = true;
+}));
+function syncStyle() { $("styleBar").setAttribute("aria-pressed", String(state.style === "bar")); $("styleBlock").setAttribute("aria-pressed", String(state.style === "block")); }
+$("swatches").innerHTML = CURSOR_COLORS.map((c, i) => `<button type="button" class="swatch" id="sw${i}" data-hex="${c.hex}" title="${c.name}" aria-label="${c.name} cursor" aria-pressed="${c.hex === state.cursorHex}" style="background:${c.hex}"></button>`).join("");
+$("swatches").addEventListener("click", ev => {
+  const b = ev.target.closest(".swatch"); if (!b) return;
+  state.cursorHex = b.dataset.hex; persist();
+  $("swatches").querySelectorAll(".swatch").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  term.dirty = true;
+});
+syncStyle();
+
+/* ---------- terminal model ---------- */
+const PROMPT = [["~/developer/atelier ", "blue"], ["main ", "violet"], ["❯ ", "green"]];
+const PROMPT_LEN = PROMPT.reduce((n, s) => n + [...s[0]].length, 0);
+const term = { lines: [], buf: "", caret: 0, rows: 15, cols: 80, dirty: true };
+function newPrompt() { term.lines.push(null); term.buf = ""; term.caret = 0; term.dirty = true; }
+function commit() { term.lines[term.lines.length - 1] = PROMPT.concat([[term.buf, "fg"]]); }
+function runCommand(out) {
+  commit();
+  const cmd = term.buf.trim();
+  if (cmd === "clear") { term.lines = []; newPrompt(); return; }
+  (out || (cmd ? [["zsh: command not found: " + cmd.split(" ")[0], "red"]] : [])).forEach(([t, c]) => term.lines.push([[t, c || "dim"]]));
+  newPrompt();
+}
+function lineSegments(i) { return term.lines[i] === null ? PROMPT.concat([[term.buf, "fg"]]) : term.lines[i]; }
+function cursorCell() { return { col: Math.min(PROMPT_LEN + term.caret, term.cols - 1), row: Math.min(term.lines.length, term.rows) - 1 }; }
+newPrompt();
+
+/* ---------- demo script ---------- */
+const OUT_STATUS = [["On branch main", "dim"], ["Your branch is up to date with 'origin/main'.", "dim"], ["", "dim"], ["nothing to commit, working tree clean", "dim"]];
+const OUT_BUILD = [["Building for production...", "dim"], ["[42/42] Linking Atelier", "dim"], ["Build complete! (6.42s)", "green"]];
+const OUT_RUN = [["Atelier 1.4.2", "fg"], ["menu bar ready · 3 windows restored", "dim"]];
+const SCRIPT = [
+  ["wait", 0.8], ["type", "git status"], ["wait", 0.35], ["enter", OUT_STATUS],
+  ["wait", 1.0], ["type", "swift build -c relase"], ["wait", 0.45], ["left", 3], ["wait", 0.25], ["type", "e"], ["wait", 0.3], ["end"], ["wait", 0.4], ["enter", OUT_BUILD],
+  ["wait", 1.0], ["type", "./Atelier --verbose"], ["wait", 0.5], ["home"], ["wait", 0.7], ["end"], ["wait", 0.4], ["bs", 9], ["type", "--quiet"], ["wait", 0.4], ["enter", OUT_RUN],
+  ["wait", 1.6], ["type", "clear"], ["wait", 0.4], ["enter"], ["wait", 0.6],
+];
+const demo = { on: true, i: 0, next: 0, sub: null, resumeAt: 0 };
+function demoStep(now) {
+  if (!demo.on) { if (demo.resumeAt && now >= demo.resumeAt) startDemo(now); return; }
+  if (now < demo.next) return;
+  const [op, arg] = SCRIPT[demo.i];
+  let advance = true, delay = 0;
+  if (op === "wait") delay = arg;
+  else if (op === "type") {
+    demo.sub = demo.sub ?? 0; insert(arg[demo.sub]); demo.sub++;
+    delay = 0.055 + Math.random() * 0.09;
+    if (demo.sub < arg.length) advance = false; else demo.sub = null;
+  } else if (op === "left" || op === "bs") {
+    demo.sub = demo.sub ?? 0; op === "left" ? move(-1) : backspace(); demo.sub++;
+    delay = op === "left" ? 0.11 : 0.06;
+    if (demo.sub < arg) advance = false; else demo.sub = null;
+  } else if (op === "home") { term.caret = 0; term.dirty = true; }
+  else if (op === "end") { term.caret = term.buf.length; term.dirty = true; }
+  else if (op === "enter") runCommand(arg || []);
+  demo.next = now + delay;
+  if (advance) demo.i = (demo.i + 1) % SCRIPT.length;
+}
+function startDemo(now) {
+  demo.on = true; demo.i = 0; demo.sub = null; demo.next = now + 0.3; demo.resumeAt = 0;
+  if (term.buf) runCommand([]);
+  $("mode").textContent = "demo"; $("mode").classList.add("live");
+  $("modeHint").textContent = "Click the terminal and type to try it yourself.";
+}
+function userTook(now) {
+  demo.on = false; demo.resumeAt = now + 8;
+  $("mode").textContent = "manual"; $("mode").classList.remove("live");
+  $("modeHint").innerHTML = "Enter runs, arrows and Home/End move, <code>clear</code> clears. The demo resumes after 8 s idle.";
+}
+function insert(ch) { term.buf = term.buf.slice(0, term.caret) + ch + term.buf.slice(term.caret); term.caret++; term.dirty = true; }
+function backspace() { if (term.caret > 0) { term.buf = term.buf.slice(0, term.caret - 1) + term.buf.slice(term.caret); term.caret--; term.dirty = true; } }
+function move(d) { term.caret = Math.max(0, Math.min(term.buf.length, term.caret + d)); term.dirty = true; }
+
+const screenEl = $("screen");
+screenEl.addEventListener("keydown", ev => {
+  const now = clock.sim; let handled = true;
+  if ((ev.metaKey && ev.key === "Backspace") || (ev.ctrlKey && ev.key === "u")) { term.buf = term.buf.slice(term.caret); term.caret = 0; term.dirty = true; }
+  else if ((ev.metaKey && ev.key === "ArrowLeft") || (ev.ctrlKey && ev.key === "a") || ev.key === "Home") { term.caret = 0; term.dirty = true; }
+  else if ((ev.metaKey && ev.key === "ArrowRight") || (ev.ctrlKey && ev.key === "e") || ev.key === "End") { term.caret = term.buf.length; term.dirty = true; }
+  else if (ev.metaKey || ev.ctrlKey) handled = false;
+  else if (ev.key === "Backspace") backspace();
+  else if (ev.key === "Delete") { term.buf = term.buf.slice(0, term.caret) + term.buf.slice(term.caret + 1); term.dirty = true; }
+  else if (ev.key === "Enter") runCommand(null);
+  else if (ev.key === "ArrowLeft") move(-1);
+  else if (ev.key === "ArrowRight") move(1);
+  else if (ev.key.length === 1) { if (PROMPT_LEN + term.buf.length < term.cols - 1) insert(ev.key); }
+  else handled = false;
+  if (handled) { ev.preventDefault(); userTook(now); }
+});
+screenEl.addEventListener("pointerdown", () => screenEl.focus());
+
+/* ---------- the frame Ghostty would hand the shader ---------- */
+const textCanvas = document.createElement("canvas");
+const tctx = textCanvas.getContext("2d");
+const glCanvas = $("gl");
+const metrics = { dpr: 1, font: 14, cw: 8, lh: 18, pad: 10, w: 0, h: 0 };
+function layout() {
+  const cssW = screenEl.clientWidth || 600;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const font = cssW < 520 ? 11 : 14;
+  tctx.font = `${font * dpr}px "JetBrains Mono", ui-monospace, Menlo, monospace`;
+  const cw = Math.round(tctx.measureText("M").width) || Math.round(font * 0.6 * dpr);
+  const lh = Math.round(font * 1.42 * dpr);
+  const pad = Math.round(12 * dpr);
+  const w = Math.round(cssW * dpr);
+  term.cols = Math.max(30, Math.floor((w - pad * 2) / cw));
+  const h = pad * 2 + term.rows * lh;
+  Object.assign(metrics, { dpr, font, cw, lh, pad, w, h });
+  textCanvas.width = glCanvas.width = w; textCanvas.height = glCanvas.height = h;
+  glCanvas.style.height = (h / dpr) + "px";
+  term.dirty = true; if (gl) resizeTargets();
+}
+function drawText() {
+  const { dpr, font, cw, lh, pad, w, h } = metrics;
+  tctx.fillStyle = TERM.bg; tctx.fillRect(0, 0, w, h);
+  tctx.font = `${font * dpr}px "JetBrains Mono", ui-monospace, Menlo, monospace`;
+  tctx.textBaseline = "middle";
+  const first = Math.max(0, term.lines.length - term.rows);
+  const cur = cursorCell();
+  for (let r = 0; r < term.rows && first + r < term.lines.length; r++) {
+    let col = 0;
+    for (const [text, color] of lineSegments(first + r)) {
+      tctx.fillStyle = TERM[color] || TERM.fg;
+      for (const ch of text) { if (col >= term.cols) break; tctx.fillText(ch, pad + col * cw, pad + r * lh + lh / 2); col++; }
+    }
+  }
+  // the terminal draws its own cursor, as Ghostty does
+  const x = pad + cur.col * cw, y = pad + cur.row * lh;
+  const width = state.style === "bar" ? Math.max(1, Math.round(1.5 * dpr)) : cw;
+  tctx.fillStyle = state.cursorHex; tctx.fillRect(x, y, width, lh);
+  const ch = term.buf[term.caret];
+  if (ch && state.style === "block") { tctx.fillStyle = TERM.bg; tctx.fillText(ch, x, y + lh / 2); }
+  return { x, yTop: y, width };
+}
+
+/* ---------- WebGL harness: Ghostty's uniforms, as plain uniforms ---------- */
+const PREFIX = `#version 300 es
+precision highp float;
+uniform vec3 iResolution; uniform float iTime; uniform float iTimeDelta; uniform float iFrameRate; uniform int iFrame;
+uniform vec4 iMouse; uniform vec4 iDate;
+uniform vec4 iCurrentCursor; uniform vec4 iPreviousCursor;
+uniform vec4 iCurrentCursorColor; uniform vec4 iPreviousCursorColor;
+uniform int iCurrentCursorStyle; uniform int iPreviousCursorStyle; uniform int iCursorVisible;
+uniform float iTimeCursorChange; uniform float iTimeFocus; uniform int iFocus;
+uniform vec3 iBackgroundColor; uniform vec3 iForegroundColor; uniform vec3 iCursorColor;
+uniform sampler2D iChannel0;
+#define CURSORSTYLE_BLOCK 0
+#define CURSORSTYLE_BLOCK_HOLLOW 1
+#define CURSORSTYLE_BAR 2
+#define CURSORSTYLE_UNDERLINE 3
+#define CURSORSTYLE_LOCK 4
+#define texture2D texture
+out vec4 _fragColor;
+`;
+const SUFFIX = `
+void main() { mainImage(_fragColor, gl_FragCoord.xy); }`;
+const PASS = `void mainImage(out vec4 o, in vec2 p) { o = texture(iChannel0, p / iResolution.xy); }`;
+const VERT = `#version 300 es
+in vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }`;
+const UNIFORMS = ["iResolution","iTime","iTimeDelta","iFrame","iChannel0","iCurrentCursor","iPreviousCursor","iCurrentCursorColor","iPreviousCursorColor","iCurrentCursorStyle","iPreviousCursorStyle","iCursorVisible","iTimeCursorChange","iTimeFocus","iFocus","iBackgroundColor","iForegroundColor","iCursorColor"];
+
+const gl = glCanvas.getContext("webgl2", { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true });
+const programs = {};
+let srcTex, targets = [], chain = [];
+function showErr(msg) { $("err").hidden = !msg; $("err").textContent = msg || ""; }
+function compile(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program(id, body) {
+  if (programs[id]) return programs[id];
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, PREFIX + body + SUFFIX));
+  gl.bindAttribLocation(p, 0, "a"); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; UNIFORMS.forEach(n => u[n] = gl.getUniformLocation(p, n));
+  return programs[id] = { p, u };
+}
+function makeTex() {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+function resizeTargets() {
+  targets.forEach(t => { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); });
+  targets = [0, 1].map(() => {
+    const tex = makeTex();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, metrics.w, metrics.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    return { tex, fb };
+  });
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+function rebuildChain() {
+  try {
+    const ids = EFFECTS.map(e => e.id).filter(id => state.enabled.has(id));
+    chain = ids.length ? ids.map(id => program(id, BY_ID[id].src)) : [program("_pass", PASS)];
+    showErr("");
+  } catch (e) { chain = [program("_pass", PASS)]; showErr("Compile error\n" + e.message); }
+}
+function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
+
+const clock = { sim: 0, last: performance.now(), frame: 0 };
+const cursor = { cur: [0, 0, 0, 0], prev: [0, 0, 0, 0], changed: 0, key: "" };
+window.__harness = { state, term, cursor, clock, demo, metrics, rebuildChain };
+
+function frame(nowMs) {
+  const dt = Math.min(0.1, (nowMs - clock.last) / 1000) * state.speed;
+  clock.last = nowMs; clock.sim += dt; clock.frame++;
+  demoStep(clock.sim);
+  if (term.dirty) {
+    const { x, yTop, width } = drawText();
+    const rect = [x, metrics.h - yTop, width, metrics.lh];
+    const key = rect.join(",") + state.cursorHex;
+    if (key !== cursor.key) { cursor.prev = cursor.key ? cursor.cur : rect; cursor.cur = rect; cursor.changed = clock.sim; cursor.key = key; }
+    gl.bindTexture(gl.TEXTURE_2D, srcTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textCanvas);
+    term.dirty = false;
+  }
+  const color = hexToRgb(state.cursorHex);
+  const styleId = state.style === "bar" ? 2 : 0;
+  let input = srcTex;
+  gl.viewport(0, 0, metrics.w, metrics.h);
+  chain.forEach((prog, i) => {
+    const last = i === chain.length - 1;
+    const target = last ? null : targets[i % 2];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fb : null);
+    gl.useProgram(prog.p);
+    const u = prog.u;
+    gl.uniform3f(u.iResolution, metrics.w, metrics.h, 1);
+    gl.uniform1f(u.iTime, clock.sim); gl.uniform1f(u.iTimeDelta, dt); gl.uniform1i(u.iFrame, clock.frame);
+    gl.uniform4fv(u.iCurrentCursor, cursor.cur); gl.uniform4fv(u.iPreviousCursor, cursor.prev);
+    gl.uniform4f(u.iCurrentCursorColor, color[0], color[1], color[2], 1); gl.uniform4f(u.iPreviousCursorColor, color[0], color[1], color[2], 1);
+    gl.uniform1i(u.iCurrentCursorStyle, styleId); gl.uniform1i(u.iPreviousCursorStyle, styleId); gl.uniform1i(u.iCursorVisible, 1);
+    gl.uniform1f(u.iTimeCursorChange, cursor.changed); gl.uniform1f(u.iTimeFocus, -10); gl.uniform1i(u.iFocus, 1);
+    gl.uniform3fv(u.iBackgroundColor, hexToRgb(TERM.bg)); gl.uniform3fv(u.iForegroundColor, hexToRgb(TERM.fg)); gl.uniform3fv(u.iCursorColor, color);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, input); gl.uniform1i(u.iChannel0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (target) input = target.tex;
+  });
+  requestAnimationFrame(frame);
+}
+
+render();
+if (!EFFECTS.length) {
+  $("missing").hidden = false; $("bench").hidden = true; $("lower").hidden = true;
+} else if (!gl) {
+  showErr("This browser has no WebGL 2, so the preview cannot run. The shaders are unaffected.");
+} else {
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  srcTex = makeTex();
+  const boot = () => { layout(); rebuildChain(); requestAnimationFrame(t => { clock.last = t; frame(t); }); };
+  (document.fonts && document.fonts.load ? document.fonts.load('14px "JetBrains Mono"').catch(() => {}) : Promise.resolve()).then(boot);
+  let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(layout, 120); });
+}
+</script>
+</body>
+</html>
