@@ -13,7 +13,7 @@ const float WORK_PERIOD  = 2.6;  // seconds for the light to cross the window
 const float WAIT_OPACITY = 0.65; // rail brightness while Claude waits for you (0-1)
 const float DONE_OPACITY = 0.85; // brightness of the done sweep (0-1)
 const float DONE_TIME    = 1.1;  // seconds for the sweep and its fade
-const vec3  WORK_COLOR   = vec3(-1.0);             // vec3(-1.0) uses the cursor colour
+const vec3  WORK_COLOR   = vec3(-1.0);             // vec3(-1.0) uses the cursor colour; gfx color overrides
 const vec3  WAIT_COLOR   = vec3(0.90, 0.72, 0.44); // amber
 const vec3  DONE_COLOR   = vec3(0.62, 0.81, 0.42); // soft green
 
@@ -41,6 +41,16 @@ vec3 glowBlend(vec3 base, vec3 tint, float a) {
     return lightTheme ? base * (1.0 - a * (1.0 - tint)) : screenBlend(base, tint * a);
 }
 
+// The effect colour. `gfx color` injects GFX_TINT_DARK and GFX_TINT_LIGHT, one
+// per theme; otherwise the constant above, or the cursor colour for vec3(-1.0).
+vec3 effectTint(vec3 configured) {
+#ifdef GFX_TINT_DARK
+    return dot(iBackgroundColor, vec3(0.2126, 0.7152, 0.0722)) > 0.5 ? GFX_TINT_LIGHT : GFX_TINT_DARK;
+#else
+    return configured.x < 0.0 ? iCurrentCursorColor.rgb : configured;
+#endif
+}
+
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec4 base = texture(iChannel0, fragCoord / iResolution.xy);
     fragColor = base;
@@ -57,7 +67,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec3 color;
     float a;
     if (state == WORKING) {
-        color = WORK_COLOR.x < 0.0 ? iCurrentCursorColor.rgb : WORK_COLOR;
+        color = effectTint(WORK_COLOR);
         float light = 0.0;
         if (iFocus != 0) {
             float head = fract(iTime / WORK_PERIOD) * 1.6 - 0.3;

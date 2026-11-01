@@ -70,6 +70,10 @@ h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin: 0; text
 .seg button[aria-pressed="true"] { background: #2c3138; color: #e6e9ee; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .swatches { display: inline-flex; gap: 6px; align-items: center; }
+.tintpick { display: inline-flex; align-items: center; gap: 6px; font: 500 11.5px var(--font-mono); color: #9ba1aa; }
+.tintpick input { width: 26px; height: 20px; padding: 0; border: 1px solid #3a3f47; border-radius: 4px; background: none; cursor: pointer; }
+.tintpick button { font: 500 11.5px var(--font-mono); color: #9ba1aa; background: transparent; border: 1px solid #3a3f47; border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.tintpick button[aria-pressed="true"] { background: #2c3138; color: #e6e9ee; }
 .swatch { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.18); cursor: pointer; padding: 0; }
 .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #15171b, 0 0 0 3.5px #c9ced6; }
 
@@ -151,6 +155,7 @@ pre.code .k { color: var(--accent); }
           <button type="button" id="sp4" data-speed="0.25" aria-pressed="false">¼×</button>
         </span>
         <span class="swatches" role="group" aria-label="Cursor colour" id="swatches"></span>
+        <span class="tintpick"><label for="tint">effect</label><input type="color" id="tint" title="Effect colour for this theme (gfx color)"><button type="button" id="tintReset" title="Follow the cursor colour (gfx color default)">default</button></span>
       </div>
     </div>
 
@@ -184,6 +189,7 @@ pre.code .k { color: var(--accent); }
 <script>
 const EFFECTS = window.GHOSTTY_EFFECTS || [];
 const ACTIVE = window.GHOSTTY_EFFECTS_ACTIVE || [];
+const SAVED_TINT = window.GHOSTTY_EFFECTS_TINT || null;
 const BY_ID = Object.fromEntries(EFFECTS.map(e => [e.id, e]));
 const CURSOR_COLORS = [
   { name: "Ice", hex: "#9ccfd8" },
@@ -202,6 +208,7 @@ const $ = id => document.getElementById(id);
 const state = {
   enabled: new Set((ACTIVE.length ? ACTIVE : ["glide"]).filter(id => BY_ID[id])),
   tab: null, speed: 1, cursorHex: CURSOR_COLORS[0].hex, style: "bar", theme: "dark",
+  tint: SAVED_TINT ? { dark: SAVED_TINT.dark, light: SAVED_TINT.light } : null,
 };
 try {
   const saved = JSON.parse(localStorage.getItem("ghostty-effects-preview") || "null");
@@ -226,7 +233,12 @@ function render() {
   $("tabs").innerHTML = EFFECTS.map(e => `<button type="button" role="tab" class="tab" id="tab-${e.id}" data-id="${e.id}" aria-selected="${state.tab === e.id}">${esc(e.id)}</button>`).join("");
   $("src").innerHTML = state.tab ? highlight(BY_ID[state.tab].src) : "";
   const chosen = EFFECTS.filter(e => state.enabled.has(e.id)).map(e => e.id);
-  $("cfg").innerHTML = highlight(chosen.length ? "# use exactly this selection\ngfx set " + chosen.join(" ") : "# no effect selected\ngfx off", "#");
+  const t = state.tint;
+  const colorLine = !t ? "gfx color default" : t.dark === t.light ? "gfx color " + t.dark : "gfx color " + t.dark + " " + t.light;
+  $("cfg").innerHTML = highlight((chosen.length ? "# use exactly this selection\ngfx set " + chosen.join(" ") : "# no effect selected\ngfx off")
+    + "\n# effect colour (dark, light)\n" + colorLine, "#");
+  $("tintReset").setAttribute("aria-pressed", String(!t));
+  $("tint").value = t ? t[state.theme] : state.cursorHex;
 }
 $("fxList").addEventListener("click", ev => {
   const b = ev.target.closest(".fx"); if (!b) return;
@@ -252,8 +264,14 @@ $("speeds").addEventListener("click", ev => {
 }));
 $("themes").addEventListener("click", ev => {
   const b = ev.target.closest("button"); if (!b) return;
-  state.theme = b.dataset.theme; TERM = THEMES[state.theme]; persist(); syncStyle(); term.dirty = true;
+  state.theme = b.dataset.theme; TERM = THEMES[state.theme]; persist(); syncStyle(); render(); term.dirty = true;
 });
+$("tint").addEventListener("input", ev => {
+  const v = ev.target.value;
+  if (!state.tint) state.tint = { dark: v, light: v }; else state.tint[state.theme] = v;
+  render(); recompileAll();
+});
+$("tintReset").addEventListener("click", () => { state.tint = null; render(); recompileAll(); });
 function syncStyle() {
   $("themes").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.theme === state.theme))); $("styleBar").setAttribute("aria-pressed", String(state.style === "bar")); $("styleBlock").setAttribute("aria-pressed", String(state.style === "block")); }
 $("swatches").innerHTML = CURSOR_COLORS.map((c, i) => `<button type="button" class="swatch" id="sw${i}" data-hex="${c.hex}" title="${c.name}" aria-label="${c.name} cursor" aria-pressed="${c.hex === state.cursorHex}" style="background:${c.hex}"></button>`).join("");
@@ -426,11 +444,16 @@ function compile(type, src) {
   if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
   return s;
 }
+function vec3Of(hex) { const c = hexToRgb(hex); return `vec3(${c.map(v => v.toFixed(3)).join(", ")})`; }
+function tintDefines() {
+  return state.tint ? `#define GFX_TINT_DARK ${vec3Of(state.tint.dark)}\n#define GFX_TINT_LIGHT ${vec3Of(state.tint.light)}\n` : "";
+}
+function recompileAll() { for (const k of Object.keys(programs)) { gl.deleteProgram(programs[k].p); delete programs[k]; } rebuildChain(); }
 function program(id, body) {
   if (programs[id]) return programs[id];
   const p = gl.createProgram();
   gl.attachShader(p, compile(gl.VERTEX_SHADER, VERT));
-  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, PREFIX + body + SUFFIX));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, PREFIX + tintDefines() + body + SUFFIX));
   gl.bindAttribLocation(p, 0, "a"); gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
   const u = {}; UNIFORMS.forEach(n => u[n] = gl.getUniformLocation(p, n));

@@ -26,6 +26,16 @@ float roundBoxSDF(vec2 p, vec2 center, vec2 halfSize, float r) {
     return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
 }
 
+// The effect colour. `gfx color` injects GFX_TINT_DARK and GFX_TINT_LIGHT, one
+// per theme; otherwise the constant above, or the cursor colour for vec3(-1.0).
+vec3 effectTint(vec3 configured) {
+#ifdef GFX_TINT_DARK
+    return dot(iBackgroundColor, vec3(0.2126, 0.7152, 0.0722)) > 0.5 ? GFX_TINT_LIGHT : GFX_TINT_DARK;
+#else
+    return configured.x < 0.0 ? iCurrentCursorColor.rgb : configured;
+#endif
+}
+
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec4 base = texture(iChannel0, fragCoord / iResolution.xy);
     fragColor = base;
@@ -50,6 +60,6 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
     float fade = (1.0 - t) * (1.0 - t);
     float a = OPACITY * ring * fade;
-    vec3 tint = TINT.x < 0.0 ? iCurrentCursorColor.rgb : TINT;
+    vec3 tint = effectTint(TINT);
     fragColor = vec4(mix(base.rgb, tint, a), base.a);
 }

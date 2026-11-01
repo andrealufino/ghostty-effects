@@ -55,12 +55,18 @@ gfx rm ripple             # remove one
 gfx off                   # everything off, selection kept
 gfx on                    # back on
 gfx toggle                # for a hotkey (Raycast, Shortcuts)
+gfx color #9ccfd8         # effect colour for both themes
+gfx color #9ccfd8 #008ec4 # one for dark themes, one for light themes
+gfx color default         # follow the cursor colour again
+gfx color                 # show the current colour
 gfx auto on               # pause effects on battery, resume on power
 gfx preview               # open the interactive preview
 gfx check                 # compile every shader with Ghostty's prefix
 ```
 
 Every change rewrites the include and reloads Ghostty with `SIGUSR2`, the same as Cmd+Shift+,.
+
+By default the effects take the cursor colour of the active theme. `gfx color` overrides it without touching the repo: gfx writes copies of the active shaders to `~/.local/state/ghostty-effects/shaders/` with `GFX_TINT_DARK` and `GFX_TINT_LIGHT` defined at the top, and Ghostty loads those. Each shader picks one of the two from the terminal background, so the colour follows light and dark mode. The Claude effects keep amber for waiting and green for done; the colour applies to their working state. After editing a shader while a colour is set, run `gfx on` to refresh the copies.
 
 `gfx auto on` installs a LaunchAgent (`com.andrealufino.ghostty-effects.power`) that checks the power source once a minute. `gfx off` always wins: the agent never turns on effects you switched off.
 

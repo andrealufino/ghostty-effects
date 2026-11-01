@@ -30,6 +30,16 @@ vec3 glowBlend(vec3 base, vec3 tint, float a) {
     return lightTheme ? base * (1.0 - a * (1.0 - tint)) : screenBlend(base, tint * a);
 }
 
+// The effect colour. `gfx color` injects GFX_TINT_DARK and GFX_TINT_LIGHT, one
+// per theme; otherwise the constant above, or the cursor colour for vec3(-1.0).
+vec3 effectTint(vec3 configured) {
+#ifdef GFX_TINT_DARK
+    return dot(iBackgroundColor, vec3(0.2126, 0.7152, 0.0722)) > 0.5 ? GFX_TINT_LIGHT : GFX_TINT_DARK;
+#else
+    return configured.x < 0.0 ? iCurrentCursorColor.rgb : configured;
+#endif
+}
+
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec4 base = texture(iChannel0, fragCoord / iResolution.xy);
 
@@ -41,7 +51,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float dim = smoothstep(INNER, OUTER, dist) * STRENGTH;
     float glow = (1.0 - smoothstep(0.0, INNER, dist)) * WARMTH;
 
-    vec3 tint = TINT.x < 0.0 ? iCurrentCursorColor.rgb : TINT;
+    vec3 tint = effectTint(TINT);
     vec3 col = glowBlend(base.rgb, tint, glow) * (1.0 - dim);
     fragColor = vec4(col, base.a);
 }
