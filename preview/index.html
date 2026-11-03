@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ghostty Effects</title>
+<meta name="description" content="Quiet cursor and status shaders for the Ghostty terminal, running live in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -112,6 +113,7 @@ pre.code .k { color: var(--accent); }
 .notes { padding: 14px 16px; display: grid; gap: 10px; font-size: 13.5px; color: var(--muted); }
 .notes p { margin: 0; }
 .notes code { color: var(--ink); }
+.lede a, .notes a { color: var(--accent); text-underline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .fxcard, .toggle, .toggle::after { transition: none; } }
 </style>
 <script src="shaders.js"></script>
@@ -122,7 +124,7 @@ pre.code .k { color: var(--accent); }
   <header>
     <span class="eyebrow">custom-shader · Ghostty 1.4+</span>
     <h1>Ghostty Effects</h1>
-    <p class="lede">Quiet cursor shaders for Ghostty. This preview runs the very files in <code>shaders/</code> with the same cursor uniforms Ghostty provides. Effects stack: Ghostty runs them in sequence, in the order listed.</p>
+    <p class="lede">Quiet cursor and status shaders for Ghostty. This preview runs the very files in <code>shaders/</code> with the same uniforms Ghostty provides. Effects stack: Ghostty runs them in sequence, in the order listed. <a href="https://github.com/andrealufino/ghostty-effects">Source and install on GitHub</a>.</p>
   </header>
 
   <div class="missing" id="missing" hidden>
@@ -175,7 +177,7 @@ pre.code .k { color: var(--accent); }
 
     <div class="panel">
       <h2>Effects</h2>
-      <p class="hint">Switch on one or more. The page starts from what is active in Ghostty.</p>
+      <p class="hint" id="fxHint">Switch on one or more, and pick a variant where there is a choice.</p>
       <div class="fxlist" id="fxList"></div>
     </div>
   </section>
@@ -192,6 +194,7 @@ pre.code .k { color: var(--accent); }
       <div class="cardhead"><h3>Use it</h3><button type="button" class="copy" id="copyCfg">Copy</button></div>
       <pre class="code" id="cfg"></pre>
       <div class="notes">
+        <p>New here? Clone the <a href="https://github.com/andrealufino/ghostty-effects">repo</a>, run <code>bin/gfx install</code>, then the commands above.</p>
         <p><code>gfx off</code> and <code>gfx on</code> switch everything while keeping the selection; <code>gfx auto on</code> pauses the effects on battery.</p>
         <p>Settings are the constants at the top of each shader. Edit, then run <code>gfx on</code> to reload Ghostty.</p>
         <p>While an animated shader is active, Ghostty redraws the focused window continuously. That is the only real cost.</p>
@@ -202,7 +205,11 @@ pre.code .k { color: var(--accent); }
 
 <script>
 const EFFECTS = window.GHOSTTY_EFFECTS || [];
-const ACTIVE = window.GHOSTTY_EFFECTS_ACTIVE || [];
+// state.js exists only in a local clone, written by gfx: the selection active in
+// Ghostty. Visitors of the published page get a small default set instead.
+const LOCAL = Array.isArray(window.GHOSTTY_EFFECTS_ACTIVE);
+const ACTIVE = LOCAL ? window.GHOSTTY_EFFECTS_ACTIVE : [];
+const DEFAULT_SET = ["focus-line", "spotlight", "glide"];
 const SAVED_TINT = window.GHOSTTY_EFFECTS_TINT || null;
 const BY_ID = Object.fromEntries(EFFECTS.map(e => [e.id, e]));
 const CURSOR_COLORS = [
@@ -220,7 +227,7 @@ let TERM = THEMES.dark;
 const $ = id => document.getElementById(id);
 
 const state = {
-  enabled: new Set((ACTIVE.length ? ACTIVE : ["glide"]).filter(id => BY_ID[id])),
+  enabled: new Set((ACTIVE.length ? ACTIVE : DEFAULT_SET).filter(id => BY_ID[id])),
   variants: { ...(window.GHOSTTY_EFFECTS_VARIANTS || {}) },
   tab: null, speed: 1, cursorHex: CURSOR_COLORS[0].hex, style: "bar", theme: "dark",
   tint: SAVED_TINT ? { dark: SAVED_TINT.dark, light: SAVED_TINT.light } : null,
@@ -321,6 +328,7 @@ $("swatches").addEventListener("click", ev => {
   term.dirty = true;
 });
 syncStyle();
+if (LOCAL) $("fxHint").textContent += " The page starts from what is active in Ghostty.";
 
 /* ---------- terminal model ---------- */
 const PROMPT = [["~/developer/atelier ", "blue"], ["main ", "violet"], ["❯ ", "green"]];

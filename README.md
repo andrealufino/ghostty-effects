@@ -2,6 +2,10 @@
 
 Quiet cursor and status shaders for [Ghostty](https://ghostty.org), and `gfx`, a small command to run them.
 
+[![Focus line, spotlight, glide, ripple, sheen, the Claude Code frame and focus return, running in the preview](media/preview.gif)](https://andrealufino.github.io/ghostty-effects/preview/)
+
+**[Try them live in your browser](https://andrealufino.github.io/ghostty-effects/preview/)**: the preview runs the same shaders, with every variant, on light and dark themes.
+
 - **Quiet on purpose.** Effects meant to stay on all day: a soft trail, a faint line highlight, a hairline ring. Nothing that competes with the text.
 - **Light and dark.** Every effect is tuned to show on both kinds of theme, and follows Ghostty when it switches.
 - **Status at a glance.** Two effects show what Claude Code is doing in each tab, one how your last long command ended.
@@ -169,7 +173,7 @@ The line is static while the window is in the background, so it costs nothing th
 
 ## Preview
 
-Open `preview/index.html`, or run `gfx preview`. The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms. It has a bar/block cursor switch, slow motion, cursor colours, the variants of each effect, a focus switch (to see `focus-return`, and what the others do in the background), the Claude and shell states, and a terminal you can type in.
+Open `preview/index.html`, or run `gfx preview`. The same page is published at [andrealufino.github.io/ghostty-effects/preview/](https://andrealufino.github.io/ghostty-effects/preview/). The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms. It has a bar/block cursor switch, slow motion, cursor colours, the variants of each effect, a focus switch (to see `focus-return`, and what the others do in the background), the Claude and shell states, and a terminal you can type in.
 
 The page reads two generated files next to it:
 
