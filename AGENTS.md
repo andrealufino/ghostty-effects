@@ -4,7 +4,6 @@ Ghostty shaders (`shaders/`), the `gfx` command that manages them (`bin/gfx`, zs
 
 ## Working rules
 
-- With push access to `andrealufino/ghostty-effects` (the maintainer's own sessions), commit and push to `main` without asking. Otherwise, work on a branch and open a pull request.
 - Commits carry their human author only: no AI author, co-author, trailer or signature.
 - Before committing a shader change, run `gfx check`. It compiles every shader and variant with Ghostty's prefix (it needs `glslang`) and rebuilds `preview/shaders.js`. That file is tracked and served by GitHub Pages, so commit it together with the shader. `gfx on` reloads Ghostty to try the change.
 - When behaviour or a command changes, update README.md in the same commit.
