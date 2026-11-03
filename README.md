@@ -1,6 +1,16 @@
 # Ghostty Effects
 
-Quiet cursor shaders for [Ghostty](https://ghostty.org), and `gfx`, a small command to switch them on and off.
+Quiet cursor and status shaders for [Ghostty](https://ghostty.org), and `gfx`, a small command to run them.
+
+- **Quiet on purpose.** Effects meant to stay on all day: a soft trail, a faint line highlight, a hairline ring. Nothing that competes with the text.
+- **Light and dark.** Every effect is tuned to show on both kinds of theme, and follows Ghostty when it switches.
+- **Status at a glance.** Two effects show what Claude Code is doing in each tab, one how your last long command ended.
+- **`gfx`.** Switch effects, variants and colours from the command line. It never writes into this repo or your dotfiles, checks that a shader compiles before Ghostty loads it (with glslang installed, so a typo cannot leave the window black) and backs up the files it changes.
+- **A preview.** A browser page runs the very same shaders on a simulated terminal you can type in.
+
+> A personal project, shared as is. It is what I run every day on macOS, and may need adjusting on your setup. Issues and pull requests are welcome; replies may take a while.
+
+## Effects
 
 | Effect       | What it does |
 |--------------|--------------|
@@ -29,20 +39,25 @@ Effects stack. Ghostty runs them in sequence, in a fixed order (ambient first, c
 ## Requirements
 
 - Ghostty 1.4 or newer (the shaders use the `iFocus` and `iTimeFocus` uniforms).
-- macOS for `gfx` (it uses `pkill`, `launchctl` and `pmset`). The shaders themselves are cross-platform.
-- `python3` for `gfx preview`.
-- Optional: `brew install glslang`. With it, `gfx` compiles a shader with Ghostty's own prefix before handing it to Ghostty, so a broken edit never leaves the window black.
+- macOS for `gfx`: it is a zsh script and uses `pkill`, `launchctl` and `pmset`. The shaders themselves are cross-platform (see [Without gfx](#without-gfx)).
+- `python3`, for `gfx preview` and `gfx claude`.
+- `jq`, for the Claude Code hooks: `brew install jq`.
+- Recommended: `brew install glslang`. With it, `gfx` compiles every shader with Ghostty's own prefix before handing it over.
 
 ## Install
 
 ```sh
-~/developer/scripts/ghostty-effects/bin/gfx install
+git clone https://github.com/andrealufino/ghostty-effects.git
+ghostty-effects/bin/gfx install
+gfx add focus-line glide        # pick a couple to start with
 ```
 
-This does three things:
+Clone it wherever you like, and leave it there: Ghostty loads the shaders from the clone, so a `git pull` updates them. `gfx` is linked into `~/.local/bin`, which needs to be on your `PATH`.
+
+`gfx install` does three things:
 
 1. Links `gfx` into `~/.local/bin`.
-2. Appends one line to the Ghostty config, in place (a symlinked config stays a symlink):
+2. Appends an include to the Ghostty config, under a comment that marks it as gfx's, in place (a symlinked config stays a symlink):
    ```
    config-file = ?~/.local/state/ghostty-effects/ghostty.conf
    ```
@@ -52,6 +67,16 @@ This does three things:
 The generated include and the selection live in `~/.local/state/ghostty-effects/`, outside this repo and outside the dotfiles, so switching effects never dirties `git status`.
 
 gfx changes two files of yours: the Ghostty config (`install` and `uninstall`) and `~/.claude/settings.json` (`gfx claude on|off`). Before each change it saves a copy to `~/.local/state/ghostty-effects/backups/`, named after the file with a timestamp, and keeps the last five of each. A symlinked file is followed, so the copy holds the real content. If the copy fails, the file is left alone.
+
+### Without gfx
+
+The shaders are plain Ghostty custom shaders, so they also work on Linux or without `gfx`. Add one line per effect to the Ghostty config:
+
+```
+custom-shader = /path/to/ghostty-effects/shaders/glide.glsl
+```
+
+Variants and the effect colour are added by `gfx`: by hand, each effect uses its `normal` settings and the cursor colour. To pick a variant, copy the shader and put `#define GFX_VARIANT_WIDE` (or the variant you want) on its first line.
 
 ## Use
 
