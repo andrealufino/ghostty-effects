@@ -51,6 +51,8 @@ This does three things:
 
 The generated include and the selection live in `~/.local/state/ghostty-effects/`, outside this repo and outside the dotfiles, so switching effects never dirties `git status`.
 
+gfx changes two files of yours: the Ghostty config (`install` and `uninstall`) and `~/.claude/settings.json` (`gfx claude on|off`). Before each change it saves a copy to `~/.local/state/ghostty-effects/backups/`, named after the file with a timestamp, and keeps the last five of each. A symlinked file is followed, so the copy holds the real content. If the copy fails, the file is left alone.
+
 ## Use
 
 ```sh
@@ -181,4 +183,4 @@ Each shader starts with a `// --- settings` block of constants: duration, opacit
 gfx uninstall
 ```
 
-Removes the config line, the LaunchAgent, the link and the state. The repo stays.
+Removes the config lines, the Claude Code hooks, the LaunchAgent, the link and the state. The Ghostty config is left exactly as it was before `install`. The backups stay in `~/.local/state/ghostty-effects/backups/`, and so does the repo.

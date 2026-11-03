@@ -17,6 +17,8 @@ AGENT_LABEL=com.andrealufino.ghostty-effects.power
 AGENT_PLIST=$HOME/Library/LaunchAgents/$AGENT_LABEL.plist
 MARK="# --- Cursor effects (managed by gfx, see $ROOT) ---"
 CLAUDE_SETTINGS=${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
+BACKUPS=$STATE/backups   # copies of your files from before gfx rewrote them
+BACKUP_KEEP=5            # copies kept per file
 
 # Application order: ambient effects first, cursor effects last.
 # Shaders not listed here are applied after these, alphabetically.
@@ -171,6 +173,21 @@ shader_source() {
 }
 
 validator() { print -- ${commands[glslangValidator]:-} }
+
+# Copies one of your files to $BACKUPS before gfx rewrites it, as
+# name.YYYYmmdd-HHMMSS, keeping the last BACKUP_KEEP copies of each. A symlink
+# is followed, so the copy holds the real content. Dies if the copy fails, so
+# nothing is ever rewritten without one.
+backup() {
+  local file=$1
+  local -a copies
+  [[ -f $file ]] || return 0
+  mkdir -p $BACKUPS
+  cp ${file:A} $BACKUPS/${file:t}.$(date +%Y%m%d-%H%M%S) || die "could not back up $file, nothing changed."
+  copies=($BACKUPS/${file:t}.<->-<->(N.on))
+  (( ${#copies} > BACKUP_KEEP )) && rm -f ${copies[1,-$(( BACKUP_KEEP + 1 ))]}
+  return 0
+}
 
 # Compile shaders, each given as name:variant, with Ghostty's own prefix and the
 # defines gfx adds: exactly what Ghostty would load. A broken shader can leave
@@ -517,6 +534,7 @@ cmd_install() {
   ln -sf $SELF $HOME/.local/bin/gfx
   [[ -e $STATE/selection ]] || : > $STATE/selection
   if ! grep -qF -- "config-file = ?$INCLUDE" $cfg; then
+    backup $cfg
     print -l -- "" "$MARK" "config-file = ?$INCLUDE" >> $cfg
     print -- "Added the effects include to ${cfg:A}"
   fi
@@ -530,16 +548,23 @@ cmd_uninstall() {
   local cfg tmp
   cmd_auto off >/dev/null
   [[ -f $CLAUDE_SETTINGS ]] && cmd_claude off >/dev/null
-  if cfg=$(ghostty_config); then
+  if cfg=$(ghostty_config) && grep -qF -e "$MARK" -e "config-file = ?$INCLUDE" $cfg; then
+    backup $cfg
     tmp=$(mktemp)
-    grep -vF -e "$MARK" -e "config-file = ?$INCLUDE" $cfg > $tmp
+    # drop gfx's two lines and the blank line install put before them
+    awk -v mark="$MARK" -v inc="config-file = ?$INCLUDE" '
+      $0 == "" { blanks++; next }
+      $0 == mark || $0 == inc { blanks = 0; next }
+      { for (; blanks > 0; blanks--) print ""; print }
+      END { for (; blanks > 0; blanks--) print "" }' $cfg > $tmp
     cat $tmp > $cfg   # write in place, so a symlinked config stays a symlink
     rm -f $tmp
   fi
   [[ ${${:-$HOME/.local/bin/gfx}:A} == $SELF ]] && rm -f $HOME/.local/bin/gfx
-  rm -rf $STATE
+  rm -rf $STATE/^backups(N)   # everything but the backups
   pkill -USR2 -x ghostty 2>/dev/null
   print -- "Removed gfx from Ghostty. The repo itself is untouched."
+  [[ -d $BACKUPS ]] && print -- "Copies of your files from before gfx changed them are in ${BACKUPS/#$HOME/~}."
 }
 
 # ---------- Claude Code status
@@ -604,6 +629,7 @@ cmd_claude() {
   esac
   [[ -f $CLAUDE_SETTINGS ]] || die "Claude Code settings not found at $CLAUDE_SETTINGS."
   (( $+commands[jq] )) || die "jq is needed for the Claude Code hooks (brew install jq)."
+  [[ $action == status ]] || backup $CLAUDE_SETTINGS
   python3 - $CLAUDE_SETTINGS $action <<'PY' || die "could not update $CLAUDE_SETTINGS."
 import json, sys
 path, action = sys.argv[1], sys.argv[2]
