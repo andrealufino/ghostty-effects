@@ -2,6 +2,9 @@
 // Ghostty does. Copied from ghostty-org/ghostty
 // src/renderer/shaders/shadertoy_prefix.glsl (main branch, November 2026).
 // If a newer Ghostty adds uniforms, refresh this file from upstream.
+//
+// Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors.
+// MIT license: see tools/LICENSE.ghostty.
 #version 430 core
 
 layout(binding = 1, std140) uniform Globals {

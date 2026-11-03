@@ -184,3 +184,7 @@ gfx uninstall
 ```
 
 Removes the config lines, the Claude Code hooks, the LaunchAgent, the link and the state. The Ghostty config is left exactly as it was before `install`. The backups stay in `~/.local/state/ghostty-effects/backups/`, and so does the repo.
+
+## License
+
+MIT, see [LICENSE](LICENSE). `tools/ghostty-prefix.glsl` comes from [Ghostty](https://github.com/ghostty-org/ghostty) and keeps Ghostty's own MIT license, in [tools/LICENSE.ghostty](tools/LICENSE.ghostty).
