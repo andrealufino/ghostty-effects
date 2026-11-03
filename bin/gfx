@@ -20,7 +20,7 @@ CLAUDE_SETTINGS=${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
 
 # Application order: ambient effects first, cursor effects last.
 # Shaders not listed here are applied after these, alphabetically.
-ORDER=(focus-line spotlight claude-frame claude-rail glide ripple sheen)
+ORDER=(focus-line spotlight focus-return claude-frame claude-rail shell-status glide ripple sheen)
 
 # Claude Code status signal. The hooks write the state into palette slot 255
 # as rgb(238, 237, 236 + state); the claude-* shaders decode it. Idle resets
@@ -529,6 +529,20 @@ print("Claude Code hooks: " + action + ("" if action == "off" else ". Takes effe
 PY
 }
 
+# ---------- shell status
+
+# The shell-status effect needs a few zsh hooks; they live in shell/ and are
+# sourced from .zshrc, which gfx leaves for you to edit.
+cmd_shell() {
+  local rc=${ZDOTDIR:-$HOME}/.zshrc
+  if grep -qF -- "ghostty-effects/shell/gfx-status.zsh" $rc 2>/dev/null; then
+    print -- "Shell status: sourced from ${rc/#$HOME/~}."
+  else
+    print -- "Shell status: not set up. Add this line to ${rc/#$HOME/~}, then open a new tab:"
+    print -- "  source $ROOT/shell/gfx-status.zsh"
+  fi
+}
+
 cmd_help() {
   cat <<EOF
 gfx — Ghostty cursor effects
@@ -546,6 +560,7 @@ gfx — Ghostty cursor effects
                          cursor colour, the same way; default is the theme's
   gfx auto [on|off]      pause effects on battery, resume on power
   gfx claude [on|off]    Claude Code hooks for the claude-* effects
+  gfx shell              zsh hooks for the shell-status effect
   gfx preview            open the interactive preview
   gfx check [fx...]      compile shaders with Ghostty's prefix (needs glslang)
   gfx install            hook gfx into the Ghostty config (once)
@@ -560,7 +575,7 @@ EOF
 cmd=${1:-status}
 (( $# )) && shift
 case $cmd in
-  status|list|set|add|rm|on|off|toggle|color|cursor|auto|claude|hook|check|preview|install|uninstall|help|_power) cmd_$cmd "$@" ;;
+  status|list|set|add|rm|on|off|toggle|color|cursor|auto|claude|shell|hook|check|preview|install|uninstall|help|_power) cmd_$cmd "$@" ;;
   remove) cmd_rm "$@" ;;
   -h|--help) cmd_help ;;
   *) die "unknown command '$cmd'. Run 'gfx help'." ;;

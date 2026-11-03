@@ -141,6 +141,15 @@ pre.code .k { color: var(--accent); }
           <button type="button" id="cs-2" data-s="2" aria-pressed="false">waiting</button>
           <button type="button" id="cs-3" data-s="3" aria-pressed="false">done</button>
         </span>
+        <span class="seg" role="group" aria-label="Shell status" id="shellStates" title="State sent by the zsh hooks (shell-status)">
+          <button type="button" id="ss-0" data-s="0" aria-pressed="true">shell idle</button>
+          <button type="button" id="ss-1" data-s="1" aria-pressed="false">ok</button>
+          <button type="button" id="ss-2" data-s="2" aria-pressed="false">failed</button>
+        </span>
+        <span class="seg" role="group" aria-label="Window focus" id="focusStates" title="Background, then focused again, to see focus-return">
+          <button type="button" id="fo-1" data-f="1" aria-pressed="true">focused</button>
+          <button type="button" id="fo-0" data-f="0" aria-pressed="false">background</button>
+        </span>
         <span class="seg" role="group" aria-label="Terminal theme" id="themes">
           <button type="button" id="th-dark" data-theme="dark" aria-pressed="true">dark</button>
           <button type="button" id="th-light" data-theme="light" aria-pressed="false">light</button>
@@ -401,6 +410,13 @@ function drawText() {
   }
   // the terminal draws its own cursor, as Ghostty does
   const x = pad + cur.col * cw, y = pad + cur.row * lh;
+  if (!focus.on) {
+    // unfocused: Ghostty swaps to a hollow block
+    const lw = Math.max(1, Math.round(dpr));
+    tctx.strokeStyle = state.cursorHex; tctx.lineWidth = lw;
+    tctx.strokeRect(x + lw / 2, y + lw / 2, cw - lw, lh - lw);
+    return { x, yTop: y, width: cw };
+  }
   const width = state.style === "bar" ? Math.max(1, Math.round(1.5 * dpr)) : cw;
   tctx.fillStyle = state.cursorHex; tctx.fillRect(x, y, width, lh);
   const ch = term.buf[term.caret];
@@ -457,7 +473,8 @@ function program(id, body) {
   gl.bindAttribLocation(p, 0, "a"); gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
   const u = {}; UNIFORMS.forEach(n => u[n] = gl.getUniformLocation(p, n));
-  u.slot = gl.getUniformLocation(p, "iPalette[255]");
+  u.slot255 = gl.getUniformLocation(p, "iPalette[255]");
+  u.slot254 = gl.getUniformLocation(p, "iPalette[254]");
   return programs[id] = { p, u };
 }
 function makeTex() {
@@ -494,14 +511,35 @@ function setClaude(s) {
   $("claudeStates").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(+x.dataset.s === s)));
 }
 $("claudeStates").addEventListener("click", ev => { const b = ev.target.closest("button"); if (b) setClaude(+b.dataset.s); });
+// shell-status: palette slot 254, as shell/gfx-status.zsh writes it
+const shell = { state: 0 };
+function setShell(s) {
+  shell.state = s;
+  // a state with the effect off would show nothing: switch it on
+  if (s && BY_ID["shell-status"] && !state.enabled.has("shell-status")) {
+    state.enabled.add("shell-status"); state.tab = "shell-status"; render(); rebuildChain();
+  }
+  $("shellStates").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(+x.dataset.s === s)));
+}
+$("shellStates").addEventListener("click", ev => { const b = ev.target.closest("button"); if (b) setShell(+b.dataset.s); });
+// window focus: iFocus and iTimeFocus. Ghostty also swaps the cursor to a hollow
+// block, which stamps iTimeCursorChange in the same frame.
+const focus = { on: true, time: -10, pending: false };
+function setFocus(on) {
+  if (focus.on === on) return;
+  focus.on = on; focus.pending = true; term.dirty = true;
+  $("focusStates").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String((x.dataset.f === "1") === on)));
+}
+$("focusStates").addEventListener("click", ev => { const b = ev.target.closest("button"); if (b) setFocus(b.dataset.f === "1"); });
 const cursor = { cur: [0, 0, 0, 0], prev: [0, 0, 0, 0], changed: 0, key: "" };
-window.__harness = { state, term, cursor, clock, demo, metrics, rebuildChain, claude: () => claude, setClaude: s => setClaude(s) };
+window.__harness = { state, term, cursor, clock, demo, metrics, rebuildChain, claude: () => claude, setClaude: s => setClaude(s), setShell, setFocus, focus };
 
 function frame(nowMs) {
   const dt = Math.min(0.1, (nowMs - clock.last) / 1000) * state.speed;
   clock.last = nowMs; clock.sim += dt; clock.frame++;
   demoStep(clock.sim);
   if (claude.state === 3 && clock.sim >= claude.settleAt) setClaude(0);
+  if (focus.pending) { focus.time = clock.sim; focus.pending = false; }
   if (term.dirty) {
     const { x, yTop, width } = drawText();
     const rect = [x, metrics.h - yTop, width, metrics.lh];
@@ -513,7 +551,7 @@ function frame(nowMs) {
     term.dirty = false;
   }
   const color = hexToRgb(state.cursorHex);
-  const styleId = state.style === "bar" ? 2 : 0;
+  const styleId = !focus.on ? 1 : state.style === "bar" ? 2 : 0;
   let input = srcTex;
   gl.viewport(0, 0, metrics.w, metrics.h);
   chain.forEach((prog, i) => {
@@ -527,10 +565,13 @@ function frame(nowMs) {
     gl.uniform4fv(u.iCurrentCursor, cursor.cur); gl.uniform4fv(u.iPreviousCursor, cursor.prev);
     gl.uniform4f(u.iCurrentCursorColor, color[0], color[1], color[2], 1); gl.uniform4f(u.iPreviousCursorColor, color[0], color[1], color[2], 1);
     gl.uniform1i(u.iCurrentCursorStyle, styleId); gl.uniform1i(u.iPreviousCursorStyle, styleId); gl.uniform1i(u.iCursorVisible, 1);
-    gl.uniform1f(u.iTimeCursorChange, cursor.changed); gl.uniform1f(u.iTimeFocus, -10); gl.uniform1i(u.iFocus, 1);
+    gl.uniform1f(u.iTimeCursorChange, cursor.changed); gl.uniform1f(u.iTimeFocus, focus.time); gl.uniform1i(u.iFocus, focus.on ? 1 : 0);
     // palette slot 255, as the Claude Code hooks write it
     const slot = claude.state === 0 ? [238, 238, 238] : [238, 237, 236 + claude.state];
-    gl.uniform3f(u.slot, slot[0] / 255, slot[1] / 255, slot[2] / 255);
+    gl.uniform3f(u.slot255, slot[0] / 255, slot[1] / 255, slot[2] / 255);
+    // palette slot 254, as the zsh hooks write it
+    const slot254 = shell.state === 0 ? [228, 228, 228] : [228, 227, 228 + shell.state];
+    gl.uniform3f(u.slot254, slot254[0] / 255, slot254[1] / 255, slot254[2] / 255);
     gl.uniform3fv(u.iBackgroundColor, hexToRgb(TERM.bg)); gl.uniform3fv(u.iForegroundColor, hexToRgb(TERM.fg)); gl.uniform3fv(u.iCursorColor, color);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, input); gl.uniform1i(u.iChannel0, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

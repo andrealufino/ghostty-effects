@@ -9,6 +9,7 @@ Quiet cursor shaders for [Ghostty](https://ghostty.org), and `gfx`, a small comm
 | `glide`      | A short, tapered trail behind the cursor. Thin behind a bar cursor, wider behind a block. |
 | `ripple`     | A single hairline ring when the cursor lands somewhere new. Silent while typing. |
 | `sheen`      | A reflection crosses the cursor on every move, with a faint halo. Richest on a block cursor. |
+| `focus-return` | When the window comes back into focus, the edges dim for a moment and the light closes in on the cursor. |
 
 Two more show what Claude Code is doing, driven by its hooks (see [Claude Code status](#claude-code-status)):
 
@@ -16,6 +17,12 @@ Two more show what Claude Code is doing, driven by its hooks (see [Claude Code s
 |----------------|--------------|
 | `claude-frame` | A quiet frame around the window: breathes while Claude works, amber while it waits for a permission, one green flash when the answer is ready. |
 | `claude-rail`  | The same states on a single hairline along the top edge, with a light travelling along it while Claude works. |
+
+And one shows how the last long shell command ended, driven by a few zsh hooks (see [Shell status](#shell-status)):
+
+| Effect         | What it does |
+|----------------|--------------|
+| `shell-status` | A hairline along the bottom edge: green after a long command succeeds, red after it fails. Stays until the next command, and brightens for a moment when the window regains focus. |
 
 Effects stack. Ghostty runs them in sequence, in a fixed order (ambient first, cursor last), whatever order you type them in.
 
@@ -95,9 +102,28 @@ Palette slot 255 is normally `#eeeeee`; the state moves it by one step, which no
 
 The hooks sit beside any others in the settings file. `gfx claude off` removes exactly the entries that run `gfx hook`. Limits: after an approved permission the state stays amber until the tool finishes (`PostToolUse` is the first event after approval), and interrupting Claude with Esc fires no `Stop`, so the state stays on working until the next prompt.
 
+## Shell status
+
+```sh
+gfx shell               # shows the line to add to .zshrc
+gfx add shell-status
+```
+
+`shell/gfx-status.zsh` adds a `preexec` and a `precmd` hook, and does nothing outside Ghostty. After a command that ran for `GFX_STATUS_MIN` seconds or more (default 10, set it before the `source` line), it writes the outcome into palette slot 254, the same trick as the Claude effects:
+
+| Outcome | Signal |
+|---------|--------|
+| success | slot 254 = `rgb(228, 227, 229)` |
+| failure | slot 254 = `rgb(228, 227, 230)` |
+| next command starts | slot 254 reset to the theme's `#e4e4e4` |
+
+Ctrl-C (exit 130) and Ctrl-Z (148) count as neither. The `precmd` hook goes first in `precmd_functions` and returns the command's own exit status, so prompts that read `$?` see it unchanged. gfx does not edit `.zshrc` for you: it is often a dotfiles symlink.
+
+The line is static while the window is in the background, so it costs nothing there; the focus pulse only runs while the window is focused.
+
 ## Preview
 
-Open `preview/index.html`, or run `gfx preview`. The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms. It has a bar/block cursor switch, slow motion, cursor colours, and a terminal you can type in.
+Open `preview/index.html`, or run `gfx preview`. The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms. It has a bar/block cursor switch, slow motion, cursor colours, a focus switch (to see `focus-return`, and what the others do in the background), the Claude and shell states, and a terminal you can type in.
 
 The page reads two generated files next to it:
 
