@@ -1,6 +1,6 @@
 # ghostty-effects
 
-Ghostty shaders (`shaders/`), the `gfx` command that manages them (`bin/gfx`, zsh, macOS), the zsh hooks for `shell-status` (`shell/`) and a WebGL preview (`preview/`). README.md explains how each part works and how to add an effect; read it before changing anything.
+Ghostty shaders (`shaders/`), the `gfx` command that manages them (`bin/gfx`, zsh, macOS), the zsh hooks for `shell-status` (`shell/`), a WebGL preview (`preview/`) and the home page of the published site (`site/`). `.github/workflows/site.yml` compiles every shader on each push and pull request, then publishes `site/`, `preview/` and `media/` to GitHub Pages. README.md explains how each part works and how to add an effect; read it before changing anything.
 
 ## Working rules
 

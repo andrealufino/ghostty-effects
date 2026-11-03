@@ -1,0 +1,53 @@
+# Compiles every shader and variant, then publishes the site: site/index.html as
+# the home page, with preview/ and media/ next to it. Pull requests get the check
+# only; while the repo is private, publishing is skipped.
+name: Check and publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zsh and glslang
+        run: sudo apt-get update -q && sudo apt-get install -y -q zsh glslang-tools
+      - name: Compile every shader and variant
+        run: zsh bin/gfx check
+      - name: Check that preview/shaders.js matches shaders/
+        run: git diff --exit-code preview/shaders.js
+
+  publish:
+    needs: check
+    if: github.event_name != 'pull_request' && !github.event.repository.private
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the site
+        run: |
+          mkdir _site
+          cp site/index.html _site/
+          cp -R preview media _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

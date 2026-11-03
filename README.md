@@ -173,7 +173,7 @@ The line is static while the window is in the background, so it costs nothing th
 
 ## Preview
 
-Open `preview/index.html`, or run `gfx preview`. The same page is published at [andrealufino.github.io/ghostty-effects/preview/](https://andrealufino.github.io/ghostty-effects/preview/). The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms. It has a bar/block cursor switch, slow motion, cursor colours, the variants of each effect, a focus switch (to see `focus-return`, and what the others do in the background), the Claude and shell states, and a terminal you can type in.
+Open `preview/index.html`, or run `gfx preview`. The same page is published at [andrealufino.github.io/ghostty-effects/preview/](https://andrealufino.github.io/ghostty-effects/preview/). The site around it, [andrealufino.github.io/ghostty-effects](https://andrealufino.github.io/ghostty-effects/), comes from `site/index.html`; a GitHub Actions workflow compiles every shader and publishes both on each push to `main`. The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms. It has a bar/block cursor switch, slow motion, cursor colours, the variants of each effect, a focus switch (to see `focus-return`, and what the others do in the background), the Claude and shell states, and a terminal you can type in.
 
 The page reads two generated files next to it:
 
