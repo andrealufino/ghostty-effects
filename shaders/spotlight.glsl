@@ -5,11 +5,27 @@
 
 // --- settings
 const float DURATION = 0.60;  // seconds the light takes to follow the cursor
+const vec3  TINT     = vec3(-1.0); // vec3(-1.0) uses the cursor colour
+
+// --- variants: focused normal wide
+// focused narrows the light to a small pool around the cursor; wide keeps most
+// of the window lit and only shades the far corners. gfx variant spotlight wide
+#if defined(GFX_VARIANT_FOCUSED)
+const float STRENGTH = 0.42;
+const float INNER    = 0.09;
+const float OUTER    = 0.65;
+const float WARMTH   = 0.045;
+#elif defined(GFX_VARIANT_WIDE)
+const float STRENGTH = 0.20;
+const float INNER    = 0.38;
+const float OUTER    = 1.60;
+const float WARMTH   = 0.025;
+#else // normal
 const float STRENGTH = 0.30;  // darkening at the far edges (0-1)
 const float INNER    = 0.20;  // fully lit radius, as a fraction of the window height
 const float OUTER    = 1.10;  // radius where the dimming peaks, same unit
 const float WARMTH   = 0.035; // faint lift of the lit area in the cursor colour (0 = off)
-const vec3  TINT     = vec3(-1.0); // vec3(-1.0) uses the cursor colour
+#endif
 
 float easeInOutCubic(float x) {
     return x < 0.5 ? 4.0 * x * x * x : 1.0 - pow(-2.0 * x + 2.0, 3.0) * 0.5;

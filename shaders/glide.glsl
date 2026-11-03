@@ -4,13 +4,25 @@
 // Ghostty custom shader (Ghostty 1.4+). Enable with: gfx add glide
 
 // --- settings
-const float DURATION   = 0.22;  // seconds the trail takes to catch up with the cursor
-const float OPACITY    = 0.40;  // peak trail opacity (0-1)
 const float MAX_WIDTH  = 0.40;  // widest half-width at the cursor, in cursor heights
 const float MIN_WIDTH  = 0.08;  // narrowest half-width at the cursor (bar cursors), in cursor heights
 const float TAIL_RATIO = 0.15;  // tail width as a fraction of the head width
 const float MAX_JUMP   = 30.0;  // no trail for jumps longer than this, in cursor heights
 const vec3  TINT       = vec3(-1.0); // vec3(-1.0) uses the cursor colour; or e.g. vec3(0.61, 0.81, 0.85)
+
+// --- variants: short normal long
+// The trail's length is the time it takes to catch up: short is a flick behind
+// the cursor, long a visible streak. gfx variant glide long
+#if defined(GFX_VARIANT_SHORT)
+const float DURATION   = 0.12;
+const float OPACITY    = 0.34;
+#elif defined(GFX_VARIANT_LONG)
+const float DURATION   = 0.40;
+const float OPACITY    = 0.46;
+#else // normal
+const float DURATION   = 0.22;  // seconds the trail takes to catch up with the cursor
+const float OPACITY    = 0.40;  // peak trail opacity (0-1)
+#endif
 
 float easeOutCubic(float x) {
     float a = 1.0 - x;

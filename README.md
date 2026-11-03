@@ -58,7 +58,10 @@ gfx                       # what is on
 gfx list                  # the effects
 gfx set focus-line glide  # use exactly these
 gfx add ripple            # add one
+gfx add spotlight:wide    # add one, in a variant
 gfx rm ripple             # remove one
+gfx variant spotlight     # an effect's variants, the one in use marked
+gfx variant spotlight wide # use that variant
 gfx off                   # everything off, selection kept
 gfx on                    # back on
 gfx toggle                # for a hotkey (Raycast, Shortcuts)
@@ -71,7 +74,7 @@ gfx cursor #ff9e64 #c2410c # one for the dark theme, one for the light theme
 gfx cursor default        # back to the theme's cursor colour
 gfx auto on               # pause effects on battery, resume on power
 gfx preview               # open the interactive preview
-gfx check                 # compile every shader with Ghostty's prefix
+gfx check                 # compile every shader and variant with Ghostty's prefix
 ```
 
 Every change rewrites the include and reloads Ghostty with `SIGUSR2`, the same as Cmd+Shift+,.
@@ -79,6 +82,22 @@ Every change rewrites the include and reloads Ghostty with `SIGUSR2`, the same a
 By default the effects take the cursor colour of the active theme. `gfx color` overrides it without touching the repo: gfx writes copies of the active shaders to `~/.local/state/ghostty-effects/shaders/` with `GFX_TINT_DARK` and `GFX_TINT_LIGHT` defined at the top, and Ghostty loads those. Each shader picks one of the two from the terminal background, so the colour follows light and dark mode. The Claude effects keep amber for waiting and green for done; the colour applies to their working state. After editing a shader while a colour is set, run `gfx on` to refresh the copies.
 
 `gfx cursor` sets the cursor colour through the same include, and it stays in place when the effects are off. With one colour it is a plain `cursor-color` line. With two, it needs a detour: `cursor-color` has no light/dark form, so gfx reads the `theme = light:…,dark:…` pair from the main Ghostty config, writes copies of those two themes to `~/.local/state/ghostty-effects/themes/` with the cursor colour added, and points `theme` at the copies. The copies are rebuilt on every gfx command, so after changing the theme in the main config, run `gfx on`. While no effect colour is set, the effects follow the cursor colour too.
+
+## Variants
+
+Some effects come in variants, picked by name:
+
+| Effect       | Variants | |
+|--------------|----------|-|
+| `spotlight`  | `focused`, `normal`, `wide` | from a small pool of light around the cursor to a vignette that only shades the far corners |
+| `focus-line` | `subtle`, `normal`, `strong` | from barely there to readable at a glance on a busy screen |
+| `glide`      | `short`, `normal`, `long` | from a flick behind the cursor to a visible streak |
+
+`normal` is the plain settings, used when no variant is chosen. Choose one with `gfx variant spotlight wide`, or while adding the effect with `gfx add spotlight:wide` (also in `gfx set`). A variant belongs to the effect, not to the selection: it stays when the effect is removed and added again by its bare name, until another one is chosen. `gfx` shows each effect with its variant, as `spotlight:wide`.
+
+Like the colour, a variant never touches the repo: gfx writes a copy of the shader to `~/.local/state/ghostty-effects/shaders/` with `GFX_VARIANT_WIDE` defined at the top. The choices are kept in `~/.local/state/ghostty-effects/variants`.
+
+## Battery
 
 `gfx auto on` installs a LaunchAgent (`com.andrealufino.ghostty-effects.power`) that checks the power source once a minute. `gfx off` always wins: the agent never turns on effects you switched off.
 
@@ -123,24 +142,36 @@ The line is static while the window is in the background, so it costs nothing th
 
 ## Preview
 
-Open `preview/index.html`, or run `gfx preview`. The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms. It has a bar/block cursor switch, slow motion, cursor colours, a focus switch (to see `focus-return`, and what the others do in the background), the Claude and shell states, and a terminal you can type in.
+Open `preview/index.html`, or run `gfx preview`. The page runs the same GLSL files in WebGL with Ghostty's cursor uniforms. It has a bar/block cursor switch, slow motion, cursor colours, the variants of each effect, a focus switch (to see `focus-return`, and what the others do in the background), the Claude and shell states, and a terminal you can type in.
 
 The page reads two generated files next to it:
 
 - `preview/shaders.js`, the shaders bundled for the browser. It is tracked, so the page works straight from a clone. `gfx preview`, `gfx check`, `set`, `add` and `rm` rebuild it; after editing a shader, run one of them (or `gfx preview`) so the page shows the edit.
-- `preview/state.js`, the selection active in Ghostty, so the page starts from it. Untracked.
+- `preview/state.js`, the selection, variants and colour active in Ghostty, so the page starts from them. Untracked.
 
 ## Tune
 
-Each shader starts with a `// --- settings` block of constants: duration, opacity, sizes (in cursor heights, so they scale with the font), and an optional `TINT` (`vec3(-1.0)` follows the cursor colour). Edit, then `gfx on` to reload. `gfx preview` shows the change before Ghostty does.
+Each shader starts with a `// --- settings` block of constants: duration, opacity, sizes (in cursor heights, so they scale with the font), and an optional `TINT` (`vec3(-1.0)` follows the cursor colour). Effects with variants keep the settings that vary in a `// --- variants` block below it, one `#if` branch per variant; the `#else // normal` branch carries the comments. Edit, then `gfx on` to reload. `gfx preview` shows the change before Ghostty does.
 
 ## Add an effect
 
 1. Drop `name.glsl` into `shaders/`. Start it with a header comment, `// Name — what it does.`: `gfx list` and the preview read it.
 2. Write a Shadertoy-style `mainImage(out vec4 fragColor, in vec2 fragCoord)`. Read the screen with `texture(iChannel0, fragCoord / iResolution.xy)` and keep `base.a` so background opacity still works.
 3. Cursor rectangles are `xy` = top-left corner (y grows upwards), `zw` = width and height. Skip transient animation when `iFocus == 0` or when `iTimeCursorChange` equals `iTimeFocus` (Ghostty swaps to a hollow cursor on focus changes).
-4. Add the name to `ORDER` in `bin/gfx` if it should not run after the others.
-5. `gfx check name`, then `gfx preview`.
+4. Optionally, give it variants. Under the settings, add a line naming them, `normal` included, then one branch each for the settings that change:
+   ```glsl
+   // --- variants: soft normal bold
+   #if defined(GFX_VARIANT_SOFT)
+   const float OPACITY = 0.20;
+   #elif defined(GFX_VARIANT_BOLD)
+   const float OPACITY = 0.60;
+   #else // normal
+   const float OPACITY = 0.40;  // peak opacity (0-1)
+   #endif
+   ```
+   gfx and the preview read the names from that line and define `GFX_VARIANT_<NAME>` for the one chosen.
+5. Add the name to `ORDER` in `bin/gfx` if it should not run after the others.
+6. `gfx check name` (it compiles every variant), then `gfx preview`.
 
 `tools/ghostty-prefix.glsl` is Ghostty's shader prefix, copied from upstream. If a future Ghostty adds uniforms, refresh it from `src/renderer/shaders/shadertoy_prefix.glsl`.
 

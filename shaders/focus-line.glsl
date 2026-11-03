@@ -5,12 +5,26 @@
 
 // --- settings
 const float DURATION = 0.24;  // seconds for the highlight to slide to a new line
-const float OPACITY  = 0.07;  // highlight strength (0-1); keep it low
 const float EDGE     = 1.0;   // top and bottom edge softness, in pixels (keeps it to one row)
-const float TRAIL    = 14.0;  // how far it runs past the cursor before it has faded out, in cursor heights
-const float MARKER   = 0.55;  // opacity of the marker at the left edge (0 hides it)
 const float MARKER_W = 0.07;  // marker width, in cursor heights
 const vec3  TINT     = vec3(-1.0); // vec3(-1.0) uses the cursor colour
+
+// --- variants: subtle normal strong
+// subtle is barely there; strong reads at a glance on a busy screen.
+// gfx variant focus-line strong
+#if defined(GFX_VARIANT_SUBTLE)
+const float OPACITY  = 0.04;
+const float TRAIL    = 8.0;
+const float MARKER   = 0.35;
+#elif defined(GFX_VARIANT_STRONG)
+const float OPACITY  = 0.12;
+const float TRAIL    = 24.0;
+const float MARKER   = 0.75;
+#else // normal
+const float OPACITY  = 0.07;  // highlight strength (0-1); keep it low
+const float TRAIL    = 14.0;  // how far it runs past the cursor before it has faded out, in cursor heights
+const float MARKER   = 0.55;  // opacity of the marker at the left edge (0 hides it)
+#endif
 
 float easeInOutCubic(float x) {
     return x < 0.5 ? 4.0 * x * x * x : 1.0 - pow(-2.0 * x + 2.0, 3.0) * 0.5;
